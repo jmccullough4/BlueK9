@@ -1,0 +1,430 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 60;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A10000001 /* BlueK9App.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000011 /* BlueK9App.swift */; };
+		A10000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000012 /* ContentView.swift */; };
+		A10000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000013 /* Assets.xcassets */; };
+		A10000004 /* Preview Content/Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000014 /* Preview Content/Preview Assets.xcassets */; };
+		A10000050 /* MissionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000040 /* MissionController.swift */; };
+		A10000051 /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000041 /* LocationService.swift */; };
+		A10000052 /* BluetoothService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000042 /* BluetoothService.swift */; };
+		A10000053 /* MissionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000043 /* MissionModels.swift */; };
+		A10000054 /* LogManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000044 /* LogManager.swift */; };
+		A10000055 /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000045 /* NetworkMonitor.swift */; };
+		A10000056 /* WebControlServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000046 /* WebControlServer.swift */; };
+		A10000057 /* MissionDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000047 /* MissionDashboardView.swift */; };
+		A10000058 /* MissionDeviceRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000048 /* MissionDeviceRow.swift */; };
+		A10000059 /* MissionLogEntryRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000049 /* MissionLogEntryRow.swift */; };
+		A1000005A /* MissionLogShareButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000004A /* MissionLogShareButton.swift */; };
+		A1000005B /* SplashScreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000004B /* SplashScreenView.swift */; };
+		A1000005C /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A1000004C /* LaunchScreen.storyboard */; };
+		ACDB12892EA2CA7E00D5D8A2 /* playstore.png in Resources */ = {isa = PBXBuildFile; fileRef = ACDB12872EA2CA7E00D5D8A2 /* playstore.png */; };
+		ACDB128A2EA2CA7E00D5D8A2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = ACDB12862EA2CA7E00D5D8A2 /* Assets.xcassets */; };
+		ACDB128B2EA2CA7E00D5D8A2 /* appstore.png in Resources */ = {isa = PBXBuildFile; fileRef = ACDB12852EA2CA7E00D5D8A2 /* appstore.png */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A10000010 /* BlueK9.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BlueK9.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000011 /* BlueK9App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlueK9App.swift; sourceTree = "<group>"; };
+		A10000012 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		A10000013 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A10000014 /* Preview Content/Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Content/Preview Assets.xcassets"; sourceTree = "<group>"; };
+		A10000015 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A10000040 /* MissionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MissionController.swift; sourceTree = "<group>"; };
+		A10000041 /* LocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationService.swift; sourceTree = "<group>"; };
+		A10000042 /* BluetoothService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothService.swift; sourceTree = "<group>"; };
+		A10000043 /* MissionModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MissionModels.swift; sourceTree = "<group>"; };
+		A10000044 /* LogManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogManager.swift; sourceTree = "<group>"; };
+		A10000045 /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
+		A10000046 /* WebControlServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebControlServer.swift; sourceTree = "<group>"; };
+		A10000047 /* MissionDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MissionDashboardView.swift; sourceTree = "<group>"; };
+		A10000048 /* MissionDeviceRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MissionDeviceRow.swift; sourceTree = "<group>"; };
+		A10000049 /* MissionLogEntryRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MissionLogEntryRow.swift; sourceTree = "<group>"; };
+		A1000004A /* MissionLogShareButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MissionLogShareButton.swift; sourceTree = "<group>"; };
+		A1000004B /* SplashScreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplashScreenView.swift; sourceTree = "<group>"; };
+		A1000004C /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+		ACDB12852EA2CA7E00D5D8A2 /* appstore.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = appstore.png; sourceTree = "<group>"; };
+		ACDB12862EA2CA7E00D5D8A2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		ACDB12872EA2CA7E00D5D8A2 /* playstore.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = playstore.png; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A10000020 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A10000021 = {
+			isa = PBXGroup;
+			children = (
+				A10000022 /* BlueK9 */,
+				A10000023 /* Products */,
+				ACDB12882EA2CA7E00D5D8A2 /* AppIcons */,
+			);
+			sourceTree = "<group>";
+		};
+		A10000022 /* BlueK9 */ = {
+			isa = PBXGroup;
+			children = (
+				A10000011 /* BlueK9App.swift */,
+				A10000012 /* ContentView.swift */,
+				A10000060 /* Managers */,
+				A10000061 /* Models */,
+				A10000062 /* Services */,
+				A10000063 /* Views */,
+				A10000013 /* Assets.xcassets */,
+				A10000014 /* Preview Content/Preview Assets.xcassets */,
+				A10000015 /* Info.plist */,
+				A1000004C /* LaunchScreen.storyboard */,
+			);
+			path = BlueK9;
+			sourceTree = "<group>";
+		};
+		A10000023 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A10000010 /* BlueK9.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A10000060 /* Managers */ = {
+			isa = PBXGroup;
+			children = (
+				A10000042 /* BluetoothService.swift */,
+				A10000041 /* LocationService.swift */,
+				A10000040 /* MissionController.swift */,
+			);
+			path = Managers;
+			sourceTree = "<group>";
+		};
+		A10000061 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				A10000043 /* MissionModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		A10000062 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				A10000044 /* LogManager.swift */,
+				A10000045 /* NetworkMonitor.swift */,
+				A10000046 /* WebControlServer.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		A10000063 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				A10000047 /* MissionDashboardView.swift */,
+				A10000048 /* MissionDeviceRow.swift */,
+				A10000049 /* MissionLogEntryRow.swift */,
+				A1000004A /* MissionLogShareButton.swift */,
+				A1000004B /* SplashScreenView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		ACDB12882EA2CA7E00D5D8A2 /* AppIcons */ = {
+			isa = PBXGroup;
+			children = (
+				ACDB12852EA2CA7E00D5D8A2 /* appstore.png */,
+				ACDB12862EA2CA7E00D5D8A2 /* Assets.xcassets */,
+				ACDB12872EA2CA7E00D5D8A2 /* playstore.png */,
+			);
+			path = AppIcons;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A10000024 /* BlueK9 */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A10000030 /* Build configuration list for PBXNativeTarget "BlueK9" */;
+			buildPhases = (
+				A10000025 /* Sources */,
+				A10000020 /* Frameworks */,
+				A10000026 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BlueK9;
+			productName = BlueK9;
+			productReference = A10000010 /* BlueK9.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A10000027 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					A10000024 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = A10000028 /* Build configuration list for PBXProject "BlueK9" */;
+			compatibilityVersion = "Xcode 15.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A10000021;
+			productRefGroup = A10000023 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A10000024 /* BlueK9 */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A10000026 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000003 /* Assets.xcassets in Resources */,
+				A10000004 /* Preview Content/Preview Assets.xcassets in Resources */,
+				ACDB12892EA2CA7E00D5D8A2 /* playstore.png in Resources */,
+				ACDB128A2EA2CA7E00D5D8A2 /* Assets.xcassets in Resources */,
+				ACDB128B2EA2CA7E00D5D8A2 /* appstore.png in Resources */,
+				A1000005C /* LaunchScreen.storyboard in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A10000025 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000001 /* BlueK9App.swift in Sources */,
+				A10000002 /* ContentView.swift in Sources */,
+				A10000050 /* MissionController.swift in Sources */,
+				A10000051 /* LocationService.swift in Sources */,
+				A10000052 /* BluetoothService.swift in Sources */,
+				A10000053 /* MissionModels.swift in Sources */,
+				A10000054 /* LogManager.swift in Sources */,
+				A10000055 /* NetworkMonitor.swift in Sources */,
+				A10000056 /* WebControlServer.swift in Sources */,
+				A10000057 /* MissionDashboardView.swift in Sources */,
+				A10000058 /* MissionDeviceRow.swift in Sources */,
+				A10000059 /* MissionLogEntryRow.swift in Sources */,
+				A1000005A /* MissionLogShareButton.swift in Sources */,
+				A1000005B /* SplashScreenView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		A1000002A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = GM432NV6J6;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = BlueK9/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = BlueK9;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.BlueK9;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A1000002B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = GM432NV6J6;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = BlueK9/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = BlueK9;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.BlueK9;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		A1000002C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++17";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+			};
+			name = Debug;
+		};
+		A1000002D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++17";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = iphoneos;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A10000028 /* Build configuration list for PBXProject "BlueK9" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1000002C /* Debug */,
+				A1000002D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A10000030 /* Build configuration list for PBXNativeTarget "BlueK9" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1000002A /* Debug */,
+				A1000002B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A10000027 /* Project object */;
+}

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="800" height="800" viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGradient" x1="50%" x2="50%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#0A2744"/>
+      <stop offset="100%" stop-color="#1A4D7A"/>
+    </linearGradient>
+    <linearGradient id="accentGradient" x1="0%" x2="100%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#F5F7FA"/>
+      <stop offset="100%" stop-color="#D8E2F0"/>
+    </linearGradient>
+  </defs>
+  <circle cx="400" cy="400" r="360" fill="url(#bgGradient)"/>
+  <path d="M262 470c30-140 118-220 216-220 68 0 118 40 132 108 8 38 5 82-6 120l39 58c6 9 3 21-6 27-53 36-112 55-177 55-116 0-198-51-214-148-2-13 7-25 20-28l44-11c-2 43 33 96 95 112 45 12 98 2 135-24-44 4-85-11-112-40-24-25-34-60-28-99-52 41-84 102-83 175l-43-85z" fill="#E2EDF7"/>
+  <path d="M415 360c0-38 26-62 60-62 32 0 57 24 57 58 0 37-28 66-64 66-30 0-53-22-53-62z" fill="#163A5C"/>
+  <path d="M356 508c34-27 86-32 128-10 28 15 44 41 45 70-62 40-158 33-209-7 1-20 13-39 36-53z" fill="#163A5C" opacity="0.9"/>
+  <ellipse cx="365" cy="335" rx="28" ry="24" fill="#163A5C"/>
+  <ellipse cx="547" cy="348" rx="26" ry="22" fill="#163A5C"/>
+  <path d="M253 595c45 64 122 105 209 105 87 0 164-41 209-105-56 37-129 58-209 58-80 0-153-21-209-58z" fill="url(#accentGradient)" opacity="0.7"/>
+  <text x="400" y="650" font-family="AvenirNext-Bold, Avenir Next" font-weight="700" font-size="96" text-anchor="middle" fill="#F4F7FB" letter-spacing="6">BlueK9</text>
+</svg>

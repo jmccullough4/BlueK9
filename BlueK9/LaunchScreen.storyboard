@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="24128" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="LaunchScreenController">
+    <device id="retina6_7" orientation="portrait" appearance="light"/>
+    <dependencies>
+        <deployment identifier="iOS"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24063"/>
+        <capability name="Safe area layout guides" minToolsVersion="9.0"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <scenes>
+        <!--Launch Screen-->
+        <scene sceneID="LaunchScreenScene">
+            <objects>
+                <viewController storyboardIdentifier="LaunchScreenController" id="LaunchScreenController" userLabel="Launch Screen" sceneMemberID="viewController">
+                    <view key="view" contentMode="scaleToFill" id="LaunchScreenView">
+                        <rect key="frame" x="0.0" y="0.0" width="430" height="932"/>
+                        <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                        <subviews>
+                            <label opaque="NO" clipsSubviews="YES" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" ambiguous="YES" text="Mission Console" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" minimumScaleFactor="0.5" translatesAutoresizingMaskIntoConstraints="NO" id="TaglineLabel">
+                                <rect key="frame" x="120.00000000000001" y="866" width="190.33333333333337" height="33"/>
+                                <fontDescription key="fontDescription" name="AvenirNext-Bold" pointSize="24"/>
+                                <color key="textColor" red="0.90196078430000004" green="0.92549019609999994" blue="0.96078431369999995" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
+                            </label>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" fixedFrame="YES" image="playstore.png" translatesAutoresizingMaskIntoConstraints="NO" id="uGK-jy-teA">
+                                <rect key="frame" x="30" y="252" width="370" height="429"/>
+                                <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                            </imageView>
+                        </subviews>
+                        <viewLayoutGuide key="safeArea" id="SafeArea"/>
+                        <color key="backgroundColor" red="0.047058823529411764" green="0.12156862745098039" blue="0.22745098039215686" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
+                        <constraints>
+                            <constraint firstItem="TaglineLabel" firstAttribute="centerX" secondItem="LaunchScreenView" secondAttribute="centerX" id="labelCenter"/>
+                        </constraints>
+                    </view>
+                </viewController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="FirstResponder" userLabel="First Responder" sceneMemberID="firstResponder"/>
+            </objects>
+            <point key="canvasLocation" x="136.74418604651163" y="97.85407725321889"/>
+        </scene>
+    </scenes>
+    <resources>
+        <image name="playstore.png" width="512" height="512"/>
+    </resources>
+</document>
