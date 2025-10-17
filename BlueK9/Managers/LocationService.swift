@@ -93,11 +93,6 @@ private extension LocationService {
         }
         return modes.contains("location")
     }
-
-    static var supportsAlwaysAuthorization: Bool {
-        guard supportsBackgroundLocationUpdates else { return false }
-        return Bundle.main.object(forInfoDictionaryKey: "NSLocationAlwaysAndWhenInUseUsageDescription") != nil
-    }
 }
 
 extension LocationService: CLLocationManagerDelegate {
