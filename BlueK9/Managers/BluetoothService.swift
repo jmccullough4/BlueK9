@@ -6,6 +6,7 @@ protocol BluetoothServiceDelegate: AnyObject {
     func bluetoothService(_ service: BluetoothService, didDiscover device: BluetoothDevice)
     func bluetoothService(_ service: BluetoothService, didUpdate device: BluetoothDevice)
     func bluetoothService(_ service: BluetoothService, didLog entry: MissionLogEntry)
+    func bluetoothService(_ service: BluetoothService, didUpdateState state: CBManagerState)
 }
 
 final class BluetoothService: NSObject {
@@ -20,6 +21,10 @@ final class BluetoothService: NSObject {
     override init() {
         super.init()
         central = CBCentralManager(delegate: self, queue: centralQueue)
+    }
+
+    var state: CBManagerState {
+        central.state
     }
 
     func startScanning(mode: ScanMode) {
@@ -84,6 +89,8 @@ extension BluetoothService: CBCentralManagerDelegate {
         default:
             break
         }
+
+        delegate?.bluetoothService(self, didUpdateState: central.state)
     }
 
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
