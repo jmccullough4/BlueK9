@@ -27,6 +27,10 @@ final class LocationService: NSObject {
         manager.authorizationStatus
     }
 
+    var authorizationStatus: CLAuthorizationStatus {
+        manager.authorizationStatus
+    }
+
     func start() {
         evaluateAuthorization(shouldRequestPermission: true)
     }
