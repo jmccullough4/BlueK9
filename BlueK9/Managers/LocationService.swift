@@ -76,6 +76,11 @@ final class LocationService: NSObject {
             hasRequestedAlwaysAuthorization = false
         }
         guard !hasRequestedAlwaysAuthorization else { return }
+        guard Self.supportsAlwaysAuthorization else {
+            hasRequestedAlwaysAuthorization = true
+            delegate?.locationService(self, didFailWith: LocationServiceError.alwaysAuthorizationUnavailable)
+            return
+        }
         hasRequestedAlwaysAuthorization = true
         manager.requestAlwaysAuthorization()
     }
@@ -114,11 +119,14 @@ extension LocationService: CLLocationManagerDelegate {
 
 enum LocationServiceError: LocalizedError {
     case permissionDenied
+    case alwaysAuthorizationUnavailable
 
     var errorDescription: String? {
         switch self {
         case .permissionDenied:
             return "Location permission denied. Please enable location access in Settings."
+        case .alwaysAuthorizationUnavailable:
+            return "App configuration does not allow requesting always-on location."
         }
     }
 }
