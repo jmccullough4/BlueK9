@@ -162,24 +162,54 @@ struct MissionState: Codable {
         self.devices = devices
         self.logEntries = logEntries
     }
-}
 
-extension CLLocationCoordinate2D: Codable {
-    enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey {
+        case scanMode
+        case isScanning
+        case location
+        case devices
+        case logEntries
+    }
+
+    private enum LocationCodingKeys: String, CodingKey {
         case latitude
         case longitude
     }
 
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(latitude, forKey: .latitude)
-        try container.encode(longitude, forKey: .longitude)
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        scanMode = try container.decode(ScanMode.self, forKey: .scanMode)
+        isScanning = try container.decode(Bool.self, forKey: .isScanning)
+        devices = try container.decode([BluetoothDevice].self, forKey: .devices)
+        logEntries = try container.decode([MissionLogEntry].self, forKey: .logEntries)
+
+        if container.contains(.location) {
+            if try container.decodeNil(forKey: .location) {
+                location = nil
+            } else {
+                let locationContainer = try container.nestedContainer(keyedBy: LocationCodingKeys.self, forKey: .location)
+                let latitude = try locationContainer.decode(CLLocationDegrees.self, forKey: .latitude)
+                let longitude = try locationContainer.decode(CLLocationDegrees.self, forKey: .longitude)
+                location = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+            }
+        } else {
+            location = nil
+        }
     }
 
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let latitude = try container.decode(CLLocationDegrees.self, forKey: .latitude)
-        let longitude = try container.decode(CLLocationDegrees.self, forKey: .longitude)
-        self.init(latitude: latitude, longitude: longitude)
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(scanMode, forKey: .scanMode)
+        try container.encode(isScanning, forKey: .isScanning)
+        try container.encode(devices, forKey: .devices)
+        try container.encode(logEntries, forKey: .logEntries)
+
+        if let location {
+            var locationContainer = container.nestedContainer(keyedBy: LocationCodingKeys.self, forKey: .location)
+            try locationContainer.encode(location.latitude, forKey: .latitude)
+            try locationContainer.encode(location.longitude, forKey: .longitude)
+        } else {
+            try container.encodeNil(forKey: .location)
+        }
     }
 }

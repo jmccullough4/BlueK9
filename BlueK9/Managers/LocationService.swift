@@ -11,6 +11,17 @@ final class LocationService: NSObject {
     weak var delegate: LocationServiceDelegate?
     private let manager: CLLocationManager
     private var hasRequestedAlwaysAuthorization = false
+    private static var supportsBackgroundLocationUpdates: Bool {
+        guard let modes = Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String] else {
+            return false
+        }
+        return modes.contains("location")
+    }
+
+    private static var supportsAlwaysAuthorization: Bool {
+        guard supportsBackgroundLocationUpdates else { return false }
+        return Bundle.main.object(forInfoDictionaryKey: "NSLocationAlwaysAndWhenInUseUsageDescription") != nil
+    }
 
     override init() {
         manager = CLLocationManager()
@@ -23,11 +34,7 @@ final class LocationService: NSObject {
         }
     }
 
-    var authorizationStatus: CLAuthorizationStatus {
-        manager.authorizationStatus
-    }
-
-    var authorizationStatus: CLAuthorizationStatus {
+    var currentAuthorizationStatus: CLAuthorizationStatus {
         manager.authorizationStatus
     }
 
@@ -83,15 +90,6 @@ final class LocationService: NSObject {
         }
         hasRequestedAlwaysAuthorization = true
         manager.requestAlwaysAuthorization()
-    }
-}
-
-private extension LocationService {
-    static var supportsBackgroundLocationUpdates: Bool {
-        guard let modes = Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String] else {
-            return false
-        }
-        return modes.contains("location")
     }
 }
 

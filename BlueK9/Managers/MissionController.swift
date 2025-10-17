@@ -22,7 +22,7 @@ final class MissionController: ObservableObject {
         self.bluetoothService = BluetoothService()
         self.logManager = LogManager()
         self.logEntries = logManager.load()
-        self.locationAuthorizationStatus = locationService.authorizationStatus
+        self.locationAuthorizationStatus = locationService.currentAuthorizationStatus
         self.bluetoothState = bluetoothService.state
 
         locationService.delegate = self
