@@ -18,7 +18,13 @@ final class LocationService: NSObject {
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyBest
         manager.pausesLocationUpdatesAutomatically = false
-        manager.allowsBackgroundLocationUpdates = true
+        if Self.supportsBackgroundLocationUpdates {
+            manager.allowsBackgroundLocationUpdates = true
+        }
+    }
+
+    var authorizationStatus: CLAuthorizationStatus {
+        manager.authorizationStatus
     }
 
     var authorizationStatus: CLAuthorizationStatus {
@@ -70,8 +76,27 @@ final class LocationService: NSObject {
             hasRequestedAlwaysAuthorization = false
         }
         guard !hasRequestedAlwaysAuthorization else { return }
+        guard Self.supportsAlwaysAuthorization else {
+            hasRequestedAlwaysAuthorization = true
+            delegate?.locationService(self, didFailWith: LocationServiceError.alwaysAuthorizationUnavailable)
+            return
+        }
         hasRequestedAlwaysAuthorization = true
         manager.requestAlwaysAuthorization()
+    }
+}
+
+private extension LocationService {
+    static var supportsBackgroundLocationUpdates: Bool {
+        guard let modes = Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String] else {
+            return false
+        }
+        return modes.contains("location")
+    }
+
+    static var supportsAlwaysAuthorization: Bool {
+        guard supportsBackgroundLocationUpdates else { return false }
+        return Bundle.main.object(forInfoDictionaryKey: "NSLocationAlwaysAndWhenInUseUsageDescription") != nil
     }
 }
 
@@ -99,11 +124,14 @@ extension LocationService: CLLocationManagerDelegate {
 
 enum LocationServiceError: LocalizedError {
     case permissionDenied
+    case alwaysAuthorizationUnavailable
 
     var errorDescription: String? {
         switch self {
         case .permissionDenied:
             return "Location permission denied. Please enable location access in Settings."
+        case .alwaysAuthorizationUnavailable:
+            return "App configuration does not allow requesting always-on location."
         }
     }
 }
