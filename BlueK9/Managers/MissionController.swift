@@ -10,6 +10,8 @@ final class MissionController: ObservableObject {
     @Published var scanMode: ScanMode = .passive
     @Published var location: CLLocationCoordinate2D?
     @Published var locationAccuracy: CLLocationAccuracy?
+    @Published var locationAuthorizationStatus: CLAuthorizationStatus
+    @Published var bluetoothState: CBManagerState
 
     private let locationService: LocationService
     private let bluetoothService: BluetoothService
@@ -20,6 +22,8 @@ final class MissionController: ObservableObject {
         self.bluetoothService = BluetoothService()
         self.logManager = LogManager()
         self.logEntries = logManager.load()
+        self.locationAuthorizationStatus = locationService.currentAuthorizationStatus
+        self.bluetoothState = bluetoothService.state
 
         locationService.delegate = self
         bluetoothService.delegate = self
@@ -33,7 +37,18 @@ final class MissionController: ObservableObject {
 
     func startServices() {
         locationService.start()
-        startWebServer()
+        if webServer == nil {
+            startWebServer()
+        }
+    }
+
+    func requestLocationAuthorization() {
+        locationService.requestAuthorization()
+    }
+
+    func engageMissionSystems() {
+        startServices()
+        startScanning(mode: scanMode)
     }
 
     func startScanning(mode: ScanMode? = nil) {
@@ -97,6 +112,8 @@ final class MissionController: ObservableObject {
     private func bootstrapPreview() {
         location = CLLocationCoordinate2D(latitude: 37.3349, longitude: -122.0090)
         isScanning = true
+        locationAuthorizationStatus = .authorizedAlways
+        bluetoothState = .poweredOn
         devices = [
             BluetoothDevice(id: UUID(), name: "Responder Beacon", rssi: -42, state: .connected),
             BluetoothDevice(id: UUID(), name: "Body Cam", rssi: -67, state: .idle)
@@ -120,6 +137,24 @@ extension MissionController: LocationServiceDelegate {
     nonisolated func locationService(_ service: LocationService, didFailWith error: Error) {
         Task { @MainActor in
             appendLog(MissionLogEntry(type: .error, message: "Location error", metadata: ["error": error.localizedDescription]))
+        }
+    }
+
+    nonisolated func locationService(_ service: LocationService, didChangeAuthorization status: CLAuthorizationStatus) {
+        Task { @MainActor in
+            self.locationAuthorizationStatus = status
+            switch status {
+            case .authorizedAlways:
+                appendLog(MissionLogEntry(type: .note, message: "Location access granted for always on tracking"))
+            case .authorizedWhenInUse:
+                appendLog(MissionLogEntry(type: .note, message: "Location access granted while in use"))
+            case .denied, .restricted:
+                appendLog(MissionLogEntry(type: .error, message: "Location permission denied"))
+            case .notDetermined:
+                break
+            @unknown default:
+                break
+            }
         }
     }
 }
@@ -146,6 +181,22 @@ extension MissionController: BluetoothServiceDelegate {
     nonisolated func bluetoothService(_ service: BluetoothService, didLog entry: MissionLogEntry) {
         Task { @MainActor in
             appendLog(entry)
+        }
+    }
+
+    nonisolated func bluetoothService(_ service: BluetoothService, didUpdateState state: CBManagerState) {
+        Task { @MainActor in
+            self.bluetoothState = state
+            switch state {
+            case .poweredOn:
+                appendLog(MissionLogEntry(type: .note, message: "Bluetooth radio powered on"))
+            case .poweredOff:
+                appendLog(MissionLogEntry(type: .error, message: "Bluetooth radio powered off"))
+            case .unauthorized:
+                appendLog(MissionLogEntry(type: .error, message: "Bluetooth permission denied"))
+            default:
+                break
+            }
         }
     }
 }

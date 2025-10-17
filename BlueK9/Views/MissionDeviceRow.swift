@@ -81,8 +81,7 @@ struct MissionDeviceRow: View {
     }
 }
 
-#Preview {
+#Preview(traits: .sizeThatFitsLayout) {
     MissionDeviceRow(device: BluetoothDevice(id: UUID(), name: "Responder Beacon", rssi: -48, state: .connected, services: [BluetoothServiceInfo(id: CBUUID(string: "180D"))], manufacturerData: "0A1B2C"))
         .padding()
-        .previewLayout(.sizeThatFits)
 }
