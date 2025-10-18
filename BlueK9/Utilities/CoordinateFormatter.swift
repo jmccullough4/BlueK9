@@ -71,26 +71,28 @@ final class CoordinateFormatter {
     }
 
     private func zoneLetter(for latitude: CLLocationDegrees) -> String {
-        if latitude < -72 { return "C" }
-        if latitude < -64 { return "D" }
-        if latitude < -56 { return "E" }
-        if latitude < -48 { return "F" }
-        if latitude < -40 { return "G" }
-        if latitude < -32 { return "H" }
-        if latitude < -24 { return "J" }
-        if latitude < -16 { return "K" }
-        if latitude <  -8 { return "L" }
-        if latitude <   0 { return "M" }
-        if latitude <   8 { return "N" }
-        if latitude <  16 { return "P" }
-        if latitude <  24 { return "Q" }
-        if latitude <  32 { return "R" }
-        if latitude <  40 { return "S" }
-        if latitude <  48 { return "T" }
-        if latitude <  56 { return "U" }
-        if latitude <  64 { return "V" }
-        if latitude <  72 { return "W" }
-        return "X"
+        switch latitude {
+        case ..<(-72): return "C"
+        case (-72)..<(-64): return "D"
+        case (-64)..<(-56): return "E"
+        case (-56)..<(-48): return "F"
+        case (-48)..<(-40): return "G"
+        case (-40)..<(-32): return "H"
+        case (-32)..<(-24): return "J"
+        case (-24)..<(-16): return "K"
+        case (-16)..<(-8): return "L"
+        case (-8)..<(0): return "M"
+        case 0..<8: return "N"
+        case 8..<16: return "P"
+        case 16..<24: return "Q"
+        case 24..<32: return "R"
+        case 32..<40: return "S"
+        case 40..<48: return "T"
+        case 48..<56: return "U"
+        case 56..<64: return "V"
+        case 64..<72: return "W"
+        default: return "X"
+        }
     }
 
     private func utmCoordinates(for coordinate: CLLocationCoordinate2D, zoneNumber: Int) -> (easting: Double, northing: Double) {

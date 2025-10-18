@@ -38,6 +38,22 @@ struct DeviceGeo: Identifiable, Hashable, Codable {
     }
 }
 
+extension DeviceGeo {
+    static func == (lhs: DeviceGeo, rhs: DeviceGeo) -> Bool {
+        lhs.id == rhs.id &&
+        lhs.timestamp == rhs.timestamp &&
+        lhs.coordinate.latitude == rhs.coordinate.latitude &&
+        lhs.coordinate.longitude == rhs.coordinate.longitude
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(timestamp)
+        hasher.combine(coordinate.latitude)
+        hasher.combine(coordinate.longitude)
+    }
+}
+
 enum CoordinateDisplayMode: String, CaseIterable, Identifiable, Codable {
     case latitudeLongitude
     case mgrs
