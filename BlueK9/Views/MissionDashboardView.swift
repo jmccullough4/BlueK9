@@ -894,12 +894,12 @@ private struct MissionCompactMapView17: View {
             }
         }
         .onMapCameraChange { context in
-            guard let newRegion = context.region else { return }
+            let newRegion = context.region
             if !regionsAreApproximatelyEqual(newRegion, region) {
                 region = newRegion
             }
         }
-        .onChange(of: RegionSignature(region)) { _ in
+        .onChangeCompatibility(of: RegionSignature(region)) {
             guard let current = cameraPosition.regionValue else {
                 cameraPosition = .region(region)
                 return
@@ -980,12 +980,12 @@ private struct MissionDetailMapView17: View {
             }
         }
         .onMapCameraChange { context in
-            guard let newRegion = context.region else { return }
+            let newRegion = context.region
             if !regionsAreApproximatelyEqual(newRegion, region) {
                 region = newRegion
             }
         }
-        .onChange(of: RegionSignature(region)) { _ in
+        .onChangeCompatibility(of: RegionSignature(region)) {
             guard let current = cameraPosition.regionValue else {
                 cameraPosition = .region(region)
                 return
@@ -1043,7 +1043,7 @@ private struct MissionDetailMapView17: View {
 private extension MapCameraPosition {
     var regionValue: MKCoordinateRegion? {
         switch self {
-        case .region(let region):
+        case let .region(region):
             return region
         default:
             return nil
@@ -1057,7 +1057,7 @@ private struct OnChangeCompatibilityModifier<Value: Equatable>: ViewModifier {
 
     func body(content: Content) -> some View {
         if #available(iOS 17.0, *) {
-            content.onChange(of: value) {
+            content.onChange(of: value, initial: false) { _, _ in
                 action()
             }
         } else {
