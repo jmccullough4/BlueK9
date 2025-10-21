@@ -848,6 +848,20 @@ private struct MissionDeviceInfoSheet: View {
     }
 }
 
+private struct RegionSignature: Equatable {
+    let centerLatitude: Double
+    let centerLongitude: Double
+    let spanLatitudeDelta: Double
+    let spanLongitudeDelta: Double
+
+    init(_ region: MKCoordinateRegion) {
+        centerLatitude = region.center.latitude
+        centerLongitude = region.center.longitude
+        spanLatitudeDelta = region.span.latitudeDelta
+        spanLongitudeDelta = region.span.longitudeDelta
+    }
+}
+
 private func regionsAreApproximatelyEqual(_ lhs: MKCoordinateRegion, _ rhs: MKCoordinateRegion) -> Bool {
     let threshold = 1e-6
     return abs(lhs.center.latitude - rhs.center.latitude) < threshold &&
@@ -884,11 +898,17 @@ private struct MissionCompactMapView17: View {
                 region = newRegion
             }
         }
-        .onChange(of: region) { _, newRegion in
-            if let current = cameraPosition.regionValue, regionsAreApproximatelyEqual(current, newRegion) {
+        .onChange(of: RegionSignature(region)) { _ in
+            guard let current = cameraPosition.regionValue else {
+                cameraPosition = .region(region)
                 return
             }
-            cameraPosition = .region(newRegion)
+
+            if regionsAreApproximatelyEqual(current, region) {
+                return
+            }
+
+            cameraPosition = .region(region)
         }
     }
 
@@ -963,11 +983,17 @@ private struct MissionDetailMapView17: View {
                 region = newRegion
             }
         }
-        .onChange(of: region) { _, newRegion in
-            if let current = cameraPosition.regionValue, regionsAreApproximatelyEqual(current, newRegion) {
+        .onChange(of: RegionSignature(region)) { _ in
+            guard let current = cameraPosition.regionValue else {
+                cameraPosition = .region(region)
                 return
             }
-            cameraPosition = .region(newRegion)
+
+            if regionsAreApproximatelyEqual(current, region) {
+                return
+            }
+
+            cameraPosition = .region(region)
         }
     }
 
@@ -1014,10 +1040,12 @@ private struct MissionDetailMapView17: View {
 @available(iOS 17.0, *)
 private extension MapCameraPosition {
     var regionValue: MKCoordinateRegion? {
-        if case let .region(region) = self {
+        switch self {
+        case .region(let region):
             return region
+        default:
+            return nil
         }
-        return nil
     }
 }
 
