@@ -799,6 +799,19 @@ private struct MissionDeviceInfoSheet: View {
     }
 }
 
+private struct MissionMapAnnotation: Identifiable {
+    enum Kind {
+        case user
+        case device(BluetoothDevice)
+    }
+
+    let id = UUID()
+    let coordinate: CLLocationCoordinate2D
+    let label: String?
+    let color: Color
+    let kind: Kind
+}
+
 #Preview {
     MissionDashboardView()
         .environmentObject(MissionController(preview: true))
