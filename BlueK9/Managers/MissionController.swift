@@ -20,6 +20,8 @@ final class MissionController: ObservableObject {
     private let logManager: LogManager
     private var webServer: WebControlServer?
     private let coordinatePreferenceKey = "MissionCoordinateDisplayMode"
+    private let locationHistoryLimit = 200
+    private let minimumCoordinateDelta = 0.00002
     init(preview: Bool = false) {
         self.locationService = LocationService()
         self.bluetoothService = BluetoothService()
@@ -159,48 +161,94 @@ final class MissionController: ObservableObject {
     }
 
     private func updateDevice(_ device: BluetoothDevice) {
-        var enrichedDevice = device
+        let previousLocationCount = devices.first(where: { $0.id == device.id })?.locations.count ?? 0
+        let mergeResult = merge(device)
+        var updatedDevice = mergeResult.device
+        var appendedNewLocation = mergeResult.appendedLocation
+
         if let coordinate = location {
-            var history = enrichedDevice.locations
-            history.append(DeviceGeo(coordinate: coordinate))
-            enrichedDevice.locations = history
+            var history = updatedDevice.locations
+            let latest = history.last
+            if shouldRecord(coordinate: coordinate, comparedTo: latest) {
+                history.append(DeviceGeo(coordinate: coordinate))
+                updatedDevice.locations = history
+                appendedNewLocation = true
+            }
         }
 
-        let previousLocationCount = devices.first(where: { $0.id == enrichedDevice.id })?.locations.count ?? 0
+        trimHistory(for: &updatedDevice)
 
-        if let index = devices.firstIndex(where: { $0.id == enrichedDevice.id }) {
-            var merged = devices[index]
-            merged.name = enrichedDevice.name
-            merged.lastRSSI = enrichedDevice.lastRSSI
-            merged.lastSeen = enrichedDevice.lastSeen
-            merged.state = enrichedDevice.state
-            merged.services = enrichedDevice.services
-            merged.manufacturerData = enrichedDevice.manufacturerData
-            merged.hardwareAddress = enrichedDevice.hardwareAddress
-            merged.advertisedServiceUUIDs = enrichedDevice.advertisedServiceUUIDs
-            merged.estimatedRange = enrichedDevice.estimatedRange
-            merged.mapColorHex = enrichedDevice.mapColorHex
-            var locations = merged.locations
-            locations.append(contentsOf: enrichedDevice.locations)
-            var seen: Set<UUID> = []
-            merged.locations = locations.filter { seen.insert($0.id).inserted }
-            devices[index] = merged
+        if let index = devices.firstIndex(where: { $0.id == updatedDevice.id }) {
+            devices[index] = updatedDevice
         } else {
-            devices.append(enrichedDevice)
+            devices.append(updatedDevice)
         }
 
         devices.sort { $0.lastSeen > $1.lastSeen }
 
-        if let idx = devices.firstIndex(where: { $0.id == enrichedDevice.id }) {
+        if let idx = devices.firstIndex(where: { $0.id == updatedDevice.id }) {
             if let latest = devices[idx].lastKnownLocation {
                 let formatted = CoordinateFormatter.shared.string(from: latest.coordinate, mode: coordinateDisplayMode)
                 devices[idx].displayCoordinate = formatted
-                if devices[idx].locations.count > previousLocationCount {
-                    appendLog(MissionLogEntry(type: .deviceUpdated, message: "Geo fix for \(devices[idx].name)", metadata: ["coordinate": formatted, "uuid": enrichedDevice.id.uuidString]))
+                if appendedNewLocation || devices[idx].locations.count > previousLocationCount {
+                    appendLog(MissionLogEntry(type: .deviceUpdated, message: "Geo fix for \(devices[idx].name)", metadata: ["coordinate": formatted, "uuid": updatedDevice.id.uuidString]))
                 }
             } else {
                 devices[idx].displayCoordinate = nil
             }
+        }
+    }
+
+    private func merge(_ incoming: BluetoothDevice) -> (device: BluetoothDevice, appendedLocation: Bool) {
+        guard let index = devices.firstIndex(where: { $0.id == incoming.id }) else {
+            return sanitized(device: incoming)
+        }
+
+        var existing = devices[index]
+        existing.name = incoming.name
+        existing.lastRSSI = incoming.lastRSSI
+        existing.lastSeen = incoming.lastSeen
+        existing.state = incoming.state
+        existing.services = incoming.services
+        existing.manufacturerData = incoming.manufacturerData
+        existing.hardwareAddress = incoming.hardwareAddress
+        existing.advertisedServiceUUIDs = incoming.advertisedServiceUUIDs
+        existing.estimatedRange = incoming.estimatedRange
+        existing.mapColorHex = incoming.mapColorHex
+        let appended = append(locations: incoming.locations, to: &existing.locations)
+        return (existing, appended)
+    }
+
+    private func sanitized(device: BluetoothDevice) -> (device: BluetoothDevice, appendedLocation: Bool) {
+        var cleaned = device
+        cleaned.locations = []
+        let appended = append(locations: device.locations, to: &cleaned.locations)
+        return (cleaned, appended)
+    }
+
+    private func append(locations newLocations: [DeviceGeo], to collection: inout [DeviceGeo]) -> Bool {
+        guard !newLocations.isEmpty else { return false }
+        var existingIDs = Set(collection.map { $0.id })
+        var appended = false
+        for location in newLocations {
+            if existingIDs.insert(location.id).inserted {
+                collection.append(location)
+                appended = true
+            }
+        }
+        return appended
+    }
+
+    private func shouldRecord(coordinate: CLLocationCoordinate2D, comparedTo previous: DeviceGeo?) -> Bool {
+        guard let previous else { return true }
+        let deltaLat = abs(previous.coordinate.latitude - coordinate.latitude)
+        let deltaLon = abs(previous.coordinate.longitude - coordinate.longitude)
+        return deltaLat > minimumCoordinateDelta || deltaLon > minimumCoordinateDelta
+    }
+
+    private func trimHistory(for device: inout BluetoothDevice) {
+        if device.locations.count > locationHistoryLimit {
+            device.locations = Array(device.locations.suffix(locationHistoryLimit))
         }
     }
 
