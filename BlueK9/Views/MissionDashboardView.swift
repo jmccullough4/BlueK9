@@ -31,10 +31,10 @@ struct MissionDashboardView: View {
                 region.center = coordinate
             }
         }
-        .onChange(of: controller.devices) { _ in
+        .onChangeCompatibility(of: controller.devices) {
             updateRegionToFitAnnotations()
         }
-        .onChange(of: mapScope) { _ in
+        .onChangeCompatibility(of: mapScope) {
             updateRegionToFitAnnotations()
         }
         .onAppear {
@@ -242,67 +242,26 @@ struct MissionDashboardView: View {
             }
             .pickerStyle(.segmented)
 
-            Map(coordinateRegion: $region, interactionModes: [.all], showsUserLocation: false, userTrackingMode: nil, annotationItems: mapAnnotations) { annotation in
-                MapAnnotation(coordinate: annotation.coordinate) {
-                    switch annotation.kind {
-                    case .team:
-                        VStack(spacing: 4) {
-                            ZStack {
-                                Circle().fill(Color.blue.opacity(0.28)).frame(width: 44, height: 44)
-                                Circle().fill(Color.blue).frame(width: 16, height: 16)
-                            }
-                            Text("Team")
-                                .font(.caption2.weight(.semibold))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(.ultraThinMaterial)
-                                .clipShape(Capsule())
-                        }
-                    case .latest(let device, let coordinateText):
-                        Button {
-                            selectedDeviceForDetails = device
-                        } label: {
-                            VStack(spacing: 4) {
-                                ZStack {
-                                    Circle().fill(annotation.color.opacity(0.32)).frame(width: 48, height: 48)
-                                    Circle().fill(annotation.color).frame(width: 20, height: 20)
-                                }
-                                Text("\(device.name)\n\(coordinateText)")
-                                    .multilineTextAlignment(.center)
-                                    .font(.caption2.weight(.semibold))
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(.ultraThinMaterial)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                            }
-                        }
-                        .buttonStyle(.plain)
-                    case .history:
-                        Circle()
-                            .fill(annotation.color)
-                            .frame(width: 10, height: 10)
+            missionMapContent
+                .frame(height: 220)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .overlay(alignment: .topTrailing) {
+                    Button {
+                        isMapExpanded = true
+                    } label: {
+                        Label("Expand", systemImage: "arrow.up.left.and.arrow.down.right")
+                            .labelStyle(.iconOnly)
+                            .padding(10)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Circle())
                     }
+                    .padding(10)
                 }
-            }
-            .frame(height: 220)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .overlay(alignment: .topTrailing) {
-                Button {
-                    isMapExpanded = true
-                } label: {
-                    Label("Expand", systemImage: "arrow.up.left.and.arrow.down.right")
-                        .labelStyle(.iconOnly)
-                        .padding(10)
-                        .background(.ultraThinMaterial)
-                        .clipShape(Circle())
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16).strokeBorder(Color.blue.opacity(0.25), lineWidth: 1)
                 }
-                .padding(10)
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 16).strokeBorder(Color.blue.opacity(0.25), lineWidth: 1)
-            }
-            .mapStyle(.standard)
-            .gesture(TapGesture().onEnded { isMapExpanded = true })
+                .mapStyle(.standard)
+                .gesture(TapGesture().onEnded { isMapExpanded = true })
         }
         .padding()
         .background(.ultraThickMaterial)
@@ -362,12 +321,77 @@ struct MissionDashboardView: View {
         )
     }
 
+    @ViewBuilder
+    private var missionMapContent: some View {
+        if #available(iOS 17.0, *) {
+            MissionCompactMapView17(
+                region: $region,
+                annotations: mapAnnotations,
+                onSelectDevice: { selectedDeviceForDetails = $0 }
+            )
+        } else {
+            Map(
+                coordinateRegion: $region,
+                interactionModes: [.all],
+                showsUserLocation: false,
+                userTrackingMode: nil,
+                annotationItems: mapAnnotations
+            ) { annotation in
+                MapAnnotation(coordinate: annotation.coordinate) {
+                    compactAnnotationContent(for: annotation)
+                }
+            }
+        }
+    }
+
     private var mapAnnotations: [MissionMapAnnotation] {
         mapData.annotations
     }
 
     private var mapCoordinates: [CLLocationCoordinate2D] {
         mapData.coordinates
+    }
+
+    @ViewBuilder
+    private func compactAnnotationContent(for annotation: MissionMapAnnotation) -> some View {
+        switch annotation.kind {
+        case .team:
+            VStack(spacing: 4) {
+                ZStack {
+                    Circle().fill(Color.blue.opacity(0.28)).frame(width: 44, height: 44)
+                    Circle().fill(Color.blue).frame(width: 16, height: 16)
+                }
+                Text("Team")
+                    .font(.caption2.weight(.semibold))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+            }
+        case .latest(let device, let coordinateText):
+            Button {
+                selectedDeviceForDetails = device
+            } label: {
+                VStack(spacing: 4) {
+                    ZStack {
+                        Circle().fill(annotation.color.opacity(0.32)).frame(width: 48, height: 48)
+                        Circle().fill(annotation.color).frame(width: 20, height: 20)
+                    }
+                    Text("\(device.name)\n\(coordinateText)")
+                        .multilineTextAlignment(.center)
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(.ultraThinMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+            }
+            .buttonStyle(.plain)
+        case .history:
+            Circle()
+                .fill(annotation.color)
+                .frame(width: 10, height: 10)
+        }
     }
 
     private var sortedDevices: [BluetoothDevice] {
@@ -582,6 +606,7 @@ private enum MissionMapScope: Hashable, Identifiable {
         }
     }
 
+    @MainActor
     func menuTitle(with controller: MissionController, fallback: String) -> String {
         switch self {
         case .all:
@@ -639,49 +664,73 @@ private struct MissionMapDetailView: View {
         )
     }
 
-    var body: some View {
-        NavigationStack {
-            Map(coordinateRegion: $region, interactionModes: [.all], showsUserLocation: false, userTrackingMode: nil, annotationItems: mapData.annotations) { annotation in
+    @ViewBuilder
+    private var mapViewContent: some View {
+        if #available(iOS 17.0, *) {
+            MissionDetailMapView17(
+                region: $region,
+                annotations: mapData.annotations,
+                selectedDevice: $selectedDevice
+            )
+        } else {
+            Map(
+                coordinateRegion: $region,
+                interactionModes: [.all],
+                showsUserLocation: false,
+                userTrackingMode: nil,
+                annotationItems: mapData.annotations
+            ) { annotation in
                 MapAnnotation(coordinate: annotation.coordinate) {
-                    switch annotation.kind {
-                    case .team:
-                        VStack(spacing: 6) {
-                            Circle()
-                                .fill(Color.blue)
-                                .frame(width: 22, height: 22)
-                            Text("Team")
-                                .font(.caption.weight(.semibold))
-                                .padding(6)
-                                .background(.ultraThinMaterial)
-                                .clipShape(Capsule())
-                        }
-                    case .latest(let device, let coordinateText):
-                        Button {
-                            selectedDevice = device
-                        } label: {
-                            VStack(spacing: 6) {
-                                Circle()
-                                    .fill(annotation.color)
-                                    .frame(width: 26, height: 26)
-                                    .shadow(color: annotation.color.opacity(0.5), radius: 6, x: 0, y: 3)
-                                Text("\(device.name)\n\(coordinateText)")
-                                    .multilineTextAlignment(.center)
-                                    .font(.caption.weight(.semibold))
-                                    .padding(6)
-                                    .background(.ultraThinMaterial)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                            }
-                        }
-                        .buttonStyle(.plain)
-                    case .history:
-                        Circle()
-                            .fill(annotation.color)
-                            .frame(width: 12, height: 12)
-                    }
+                    detailAnnotationContent(for: annotation)
                 }
             }
-            .mapStyle(.standard)
-            .ignoresSafeArea()
+        }
+    }
+
+    @ViewBuilder
+    private func detailAnnotationContent(for annotation: MissionMapAnnotation) -> some View {
+        switch annotation.kind {
+        case .team:
+            VStack(spacing: 6) {
+                Circle()
+                    .fill(Color.blue)
+                    .frame(width: 22, height: 22)
+                Text("Team")
+                    .font(.caption.weight(.semibold))
+                    .padding(6)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+            }
+        case .latest(let device, let coordinateText):
+            Button {
+                selectedDevice = device
+            } label: {
+                VStack(spacing: 6) {
+                    Circle()
+                        .fill(annotation.color)
+                        .frame(width: 26, height: 26)
+                        .shadow(color: annotation.color.opacity(0.5), radius: 6, x: 0, y: 3)
+                    Text("\(device.name)\n\(coordinateText)")
+                        .multilineTextAlignment(.center)
+                        .font(.caption.weight(.semibold))
+                        .padding(6)
+                        .background(.ultraThinMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+            }
+            .buttonStyle(.plain)
+        case .history:
+            Circle()
+                .fill(annotation.color)
+                .frame(width: 12, height: 12)
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            mapViewContent
+                .mapStyle(.standard)
+                .ignoresSafeArea()
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Close") { dismiss() }
@@ -796,6 +845,202 @@ private struct MissionDeviceInfoSheet: View {
                 .font(.body.weight(.semibold))
                 .textSelection(.enabled)
         }
+    }
+}
+
+private func regionsAreApproximatelyEqual(_ lhs: MKCoordinateRegion, _ rhs: MKCoordinateRegion) -> Bool {
+    let threshold = 1e-6
+    return abs(lhs.center.latitude - rhs.center.latitude) < threshold &&
+        abs(lhs.center.longitude - rhs.center.longitude) < threshold &&
+        abs(lhs.span.latitudeDelta - rhs.span.latitudeDelta) < threshold &&
+        abs(lhs.span.longitudeDelta - rhs.span.longitudeDelta) < threshold
+}
+
+@available(iOS 17.0, *)
+private struct MissionCompactMapView17: View {
+    @Binding var region: MKCoordinateRegion
+    let annotations: [MissionMapAnnotation]
+    let onSelectDevice: (BluetoothDevice) -> Void
+
+    @State private var cameraPosition: MapCameraPosition
+
+    init(region: Binding<MKCoordinateRegion>, annotations: [MissionMapAnnotation], onSelectDevice: @escaping (BluetoothDevice) -> Void) {
+        _region = region
+        self.annotations = annotations
+        self.onSelectDevice = onSelectDevice
+        _cameraPosition = State(initialValue: .region(region.wrappedValue))
+    }
+
+    var body: some View {
+        Map(position: $cameraPosition, interactionModes: .all) {
+            ForEach(annotations) { annotation in
+                Annotation("", coordinate: annotation.coordinate) {
+                    compactAnnotationView(for: annotation)
+                }
+            }
+        }
+        .onChange(of: cameraPosition) { _, newValue in
+            if let newRegion = newValue.regionValue, !regionsAreApproximatelyEqual(newRegion, region) {
+                region = newRegion
+            }
+        }
+        .onChange(of: region) { _, newRegion in
+            if let current = cameraPosition.regionValue, regionsAreApproximatelyEqual(current, newRegion) {
+                return
+            }
+            cameraPosition = .region(newRegion)
+        }
+    }
+
+    @ViewBuilder
+    private func compactAnnotationView(for annotation: MissionMapAnnotation) -> some View {
+        switch annotation.kind {
+        case .team:
+            VStack(spacing: 4) {
+                ZStack {
+                    Circle().fill(Color.blue.opacity(0.28)).frame(width: 44, height: 44)
+                    Circle().fill(Color.blue).frame(width: 16, height: 16)
+                }
+                Text("Team")
+                    .font(.caption2.weight(.semibold))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+            }
+        case .latest(let device, let coordinateText):
+            Button {
+                onSelectDevice(device)
+            } label: {
+                VStack(spacing: 4) {
+                    ZStack {
+                        Circle().fill(annotation.color.opacity(0.32)).frame(width: 48, height: 48)
+                        Circle().fill(annotation.color).frame(width: 20, height: 20)
+                    }
+                    Text("\(device.name)\n\(coordinateText)")
+                        .multilineTextAlignment(.center)
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(.ultraThinMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+            }
+            .buttonStyle(.plain)
+        case .history:
+            Circle()
+                .fill(annotation.color)
+                .frame(width: 10, height: 10)
+        }
+    }
+}
+
+@available(iOS 17.0, *)
+private struct MissionDetailMapView17: View {
+    @Binding var region: MKCoordinateRegion
+    let annotations: [MissionMapAnnotation]
+    @Binding var selectedDevice: BluetoothDevice?
+
+    @State private var cameraPosition: MapCameraPosition
+
+    init(region: Binding<MKCoordinateRegion>, annotations: [MissionMapAnnotation], selectedDevice: Binding<BluetoothDevice?>) {
+        _region = region
+        self.annotations = annotations
+        _selectedDevice = selectedDevice
+        _cameraPosition = State(initialValue: .region(region.wrappedValue))
+    }
+
+    var body: some View {
+        Map(position: $cameraPosition, interactionModes: .all) {
+            ForEach(annotations) { annotation in
+                Annotation("", coordinate: annotation.coordinate) {
+                    detailAnnotationView(for: annotation)
+                }
+            }
+        }
+        .onChange(of: cameraPosition) { _, newValue in
+            if let newRegion = newValue.regionValue, !regionsAreApproximatelyEqual(newRegion, region) {
+                region = newRegion
+            }
+        }
+        .onChange(of: region) { _, newRegion in
+            if let current = cameraPosition.regionValue, regionsAreApproximatelyEqual(current, newRegion) {
+                return
+            }
+            cameraPosition = .region(newRegion)
+        }
+    }
+
+    @ViewBuilder
+    private func detailAnnotationView(for annotation: MissionMapAnnotation) -> some View {
+        switch annotation.kind {
+        case .team:
+            VStack(spacing: 6) {
+                Circle()
+                    .fill(Color.blue)
+                    .frame(width: 22, height: 22)
+                Text("Team")
+                    .font(.caption.weight(.semibold))
+                    .padding(6)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+            }
+        case .latest(let device, let coordinateText):
+            Button {
+                selectedDevice = device
+            } label: {
+                VStack(spacing: 6) {
+                    Circle()
+                        .fill(annotation.color)
+                        .frame(width: 26, height: 26)
+                        .shadow(color: annotation.color.opacity(0.5), radius: 6, x: 0, y: 3)
+                    Text("\(device.name)\n\(coordinateText)")
+                        .multilineTextAlignment(.center)
+                        .font(.caption.weight(.semibold))
+                        .padding(6)
+                        .background(.ultraThinMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+            }
+            .buttonStyle(.plain)
+        case .history:
+            Circle()
+                .fill(annotation.color)
+                .frame(width: 12, height: 12)
+        }
+    }
+}
+
+@available(iOS 17.0, *)
+private extension MapCameraPosition {
+    var regionValue: MKCoordinateRegion? {
+        if case let .region(region) = self {
+            return region
+        }
+        return nil
+    }
+}
+
+private struct OnChangeCompatibilityModifier<Value: Equatable>: ViewModifier {
+    let value: Value
+    let action: () -> Void
+
+    func body(content: Content) -> some View {
+        if #available(iOS 17.0, *) {
+            content.onChange(of: value) {
+                action()
+            }
+        } else {
+            content.onChange(of: value) { _ in
+                action()
+            }
+        }
+    }
+}
+
+private extension View {
+    func onChangeCompatibility<Value: Equatable>(of value: Value, action: @escaping () -> Void) -> some View {
+        modifier(OnChangeCompatibilityModifier(value: value, action: action))
     }
 }
 
