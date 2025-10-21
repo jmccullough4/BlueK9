@@ -893,8 +893,9 @@ private struct MissionCompactMapView17: View {
                 }
             }
         }
-        .onChange(of: cameraPosition) { _, newValue in
-            if let newRegion = newValue.regionValue, !regionsAreApproximatelyEqual(newRegion, region) {
+        .onMapCameraChange { context in
+            guard let newRegion = context.region else { return }
+            if !regionsAreApproximatelyEqual(newRegion, region) {
                 region = newRegion
             }
         }
@@ -978,8 +979,9 @@ private struct MissionDetailMapView17: View {
                 }
             }
         }
-        .onChange(of: cameraPosition) { _, newValue in
-            if let newRegion = newValue.regionValue, !regionsAreApproximatelyEqual(newRegion, region) {
+        .onMapCameraChange { context in
+            guard let newRegion = context.region else { return }
+            if !regionsAreApproximatelyEqual(newRegion, region) {
                 region = newRegion
             }
         }
