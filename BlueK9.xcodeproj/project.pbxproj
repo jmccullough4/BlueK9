@@ -86,7 +86,7 @@
                                 A10000060 /* Managers */,
                                 A10000061 /* Models */,
                                 A10000062 /* Services */,
-                                A1F00066 /* Utilities */,
+                                A1F00068 /* Utilities */,
                                 A10000063 /* Views */,
                                 A10000013 /* Assets.xcassets */,
 				A10000014 /* Preview Content/Preview Assets.xcassets */,
@@ -144,7 +144,7 @@
                         path = Views;
                         sourceTree = "<group>";
                 };
-                A1F00066 /* Utilities */ = {
+                A1F00068 /* Utilities */ = {
                         isa = PBXGroup;
                         children = (
                                 A1F00065 /* CoordinateFormatter.swift */,
