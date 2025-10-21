@@ -22,7 +22,9 @@
 		A10000058 /* MissionDeviceRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000048 /* MissionDeviceRow.swift */; };
 		A10000059 /* MissionLogEntryRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000049 /* MissionLogEntryRow.swift */; };
 		A1000005A /* MissionLogShareButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000004A /* MissionLogShareButton.swift */; };
-		A1000005B /* SplashScreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000004B /* SplashScreenView.swift */; };
+                A1000005B /* SplashScreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000004B /* SplashScreenView.swift */; };
+                A1F00064 /* CoordinateFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1F00065 /* CoordinateFormatter.swift */; };
+                A1F00066 /* DeviceColorPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1F00067 /* DeviceColorPalette.swift */; };
 		A1000005C /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A1000004C /* LaunchScreen.storyboard */; };
 		ACDB12892EA2CA7E00D5D8A2 /* playstore.png in Resources */ = {isa = PBXBuildFile; fileRef = ACDB12872EA2CA7E00D5D8A2 /* playstore.png */; };
 		ACDB128A2EA2CA7E00D5D8A2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = ACDB12862EA2CA7E00D5D8A2 /* Assets.xcassets */; };
@@ -47,8 +49,10 @@
 		A10000048 /* MissionDeviceRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MissionDeviceRow.swift; sourceTree = "<group>"; };
 		A10000049 /* MissionLogEntryRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MissionLogEntryRow.swift; sourceTree = "<group>"; };
 		A1000004A /* MissionLogShareButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MissionLogShareButton.swift; sourceTree = "<group>"; };
-		A1000004B /* SplashScreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplashScreenView.swift; sourceTree = "<group>"; };
-		A1000004C /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+                A1000004B /* SplashScreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplashScreenView.swift; sourceTree = "<group>"; };
+                A1000004C /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+                A1F00065 /* CoordinateFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoordinateFormatter.swift; sourceTree = "<group>"; };
+                A1F00067 /* DeviceColorPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceColorPalette.swift; sourceTree = "<group>"; };
 		ACDB12852EA2CA7E00D5D8A2 /* appstore.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = appstore.png; sourceTree = "<group>"; };
 		ACDB12862EA2CA7E00D5D8A2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		ACDB12872EA2CA7E00D5D8A2 /* playstore.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = playstore.png; sourceTree = "<group>"; };
@@ -74,16 +78,17 @@
 			);
 			sourceTree = "<group>";
 		};
-		A10000022 /* BlueK9 */ = {
-			isa = PBXGroup;
-			children = (
-				A10000011 /* BlueK9App.swift */,
-				A10000012 /* ContentView.swift */,
-				A10000060 /* Managers */,
-				A10000061 /* Models */,
-				A10000062 /* Services */,
-				A10000063 /* Views */,
-				A10000013 /* Assets.xcassets */,
+                A10000022 /* BlueK9 */ = {
+                        isa = PBXGroup;
+                        children = (
+                                A10000011 /* BlueK9App.swift */,
+                                A10000012 /* ContentView.swift */,
+                                A10000060 /* Managers */,
+                                A10000061 /* Models */,
+                                A10000062 /* Services */,
+                                A1F00068 /* Utilities */,
+                                A10000063 /* Views */,
+                                A10000013 /* Assets.xcassets */,
 				A10000014 /* Preview Content/Preview Assets.xcassets */,
 				A10000015 /* Info.plist */,
 				A1000004C /* LaunchScreen.storyboard */,
@@ -127,18 +132,27 @@
 			path = Services;
 			sourceTree = "<group>";
 		};
-		A10000063 /* Views */ = {
-			isa = PBXGroup;
-			children = (
-				A10000047 /* MissionDashboardView.swift */,
-				A10000048 /* MissionDeviceRow.swift */,
-				A10000049 /* MissionLogEntryRow.swift */,
-				A1000004A /* MissionLogShareButton.swift */,
-				A1000004B /* SplashScreenView.swift */,
-			);
-			path = Views;
-			sourceTree = "<group>";
-		};
+                A10000063 /* Views */ = {
+                        isa = PBXGroup;
+                        children = (
+                                A10000047 /* MissionDashboardView.swift */,
+                                A10000048 /* MissionDeviceRow.swift */,
+                                A10000049 /* MissionLogEntryRow.swift */,
+                                A1000004A /* MissionLogShareButton.swift */,
+                                A1000004B /* SplashScreenView.swift */,
+                        );
+                        path = Views;
+                        sourceTree = "<group>";
+                };
+                A1F00068 /* Utilities */ = {
+                        isa = PBXGroup;
+                        children = (
+                                A1F00065 /* CoordinateFormatter.swift */,
+                                A1F00067 /* DeviceColorPalette.swift */,
+                        );
+                        path = Utilities;
+                        sourceTree = "<group>";
+                };
 		ACDB12882EA2CA7E00D5D8A2 /* AppIcons */ = {
 			isa = PBXGroup;
 			children = (
@@ -230,14 +244,16 @@
 				A10000052 /* BluetoothService.swift in Sources */,
 				A10000053 /* MissionModels.swift in Sources */,
 				A10000054 /* LogManager.swift in Sources */,
-				A10000055 /* NetworkMonitor.swift in Sources */,
-				A10000056 /* WebControlServer.swift in Sources */,
-				A10000057 /* MissionDashboardView.swift in Sources */,
-				A10000058 /* MissionDeviceRow.swift in Sources */,
-				A10000059 /* MissionLogEntryRow.swift in Sources */,
-				A1000005A /* MissionLogShareButton.swift in Sources */,
-				A1000005B /* SplashScreenView.swift in Sources */,
-			);
+                                A10000055 /* NetworkMonitor.swift in Sources */,
+                                A10000056 /* WebControlServer.swift in Sources */,
+                                A10000057 /* MissionDashboardView.swift in Sources */,
+                                A10000058 /* MissionDeviceRow.swift in Sources */,
+                                A10000059 /* MissionLogEntryRow.swift in Sources */,
+                                A1000005A /* MissionLogShareButton.swift in Sources */,
+                                A1000005B /* SplashScreenView.swift in Sources */,
+                                A1F00064 /* CoordinateFormatter.swift in Sources */,
+                                A1F00066 /* DeviceColorPalette.swift in Sources */,
+                        );
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
@@ -265,6 +281,8 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_COMPILATION_MODE = incremental;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -350,6 +368,8 @@
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = incremental;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
 			name = Debug;
 		};
