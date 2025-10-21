@@ -37,8 +37,7 @@ private struct ActivityViewController: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
-#Preview {
+#Preview(traits: .sizeThatFitsLayout) {
     MissionLogShareButton(logURL: URL(fileURLWithPath: "/tmp/mock.json"))
         .padding()
-        .previewLayout(.sizeThatFits)
 }
