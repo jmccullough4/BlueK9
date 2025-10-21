@@ -1,5 +1,8 @@
 import Foundation
 import Network
+#if canImport(UIKit)
+import UIKit
+#endif
 
 final class WebControlServer {
     enum WebCommand {
@@ -19,6 +22,9 @@ final class WebControlServer {
     private let commandHandler: (WebCommand) -> Void
     private let logURLProvider: () -> URL
     private let encoder: JSONEncoder
+#if canImport(UIKit)
+    private var backgroundTaskIdentifier: UIBackgroundTaskIdentifier = .invalid
+#endif
 
     init(port: UInt16 = 8080, stateProvider: @escaping () -> MissionState, commandHandler: @escaping (WebCommand) -> Void, logURLProvider: @escaping () -> URL) {
         self.port = NWEndpoint.Port(rawValue: port) ?? 8080
@@ -41,6 +47,9 @@ final class WebControlServer {
                 listener.start(queue: queue)
                 self.listener = listener
                 print("WebControlServer started on port \(port)")
+#if canImport(UIKit)
+                self.beginBackgroundTaskIfNeeded()
+#endif
             } catch {
                 print("Failed to start WebControlServer: \(error)")
             }
@@ -50,6 +59,9 @@ final class WebControlServer {
     func stop() {
         listener?.cancel()
         listener = nil
+#if canImport(UIKit)
+        endBackgroundTask()
+#endif
     }
 
     private func handle(connection: NWConnection) {
@@ -97,6 +109,26 @@ final class WebControlServer {
             return httpResponse(status: "404 Not Found", body: Data("Not found".utf8))
         }
     }
+
+#if canImport(UIKit)
+    private func beginBackgroundTaskIfNeeded() {
+        DispatchQueue.main.async {
+            guard self.backgroundTaskIdentifier == .invalid else { return }
+            self.backgroundTaskIdentifier = UIApplication.shared.beginBackgroundTask(withName: "WebControlServer") {
+                self.endBackgroundTask()
+            }
+        }
+    }
+
+    private func endBackgroundTask() {
+        DispatchQueue.main.async {
+            if self.backgroundTaskIdentifier != .invalid {
+                UIApplication.shared.endBackgroundTask(self.backgroundTaskIdentifier)
+                self.backgroundTaskIdentifier = .invalid
+            }
+        }
+    }
+#endif
 
     private func handlePost(path: String) -> Data {
         if path.hasPrefix("/api/scan/start") {
@@ -221,6 +253,15 @@ final class WebControlServer {
                     color: #fecaca;
                 }
                 button:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(37, 99, 235, 0.35); }
+                button:focus { outline: none; box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.45); }
+                select {
+                    background: rgba(15, 23, 42, 0.65);
+                    border: 1px solid rgba(148, 163, 184, 0.25);
+                    border-radius: 999px;
+                    padding: 0.45rem 1.1rem;
+                    color: #e2e8f0;
+                    font-weight: 600;
+                }
                 table {
                     width: 100%;
                     border-collapse: collapse;
@@ -234,7 +275,8 @@ final class WebControlServer {
                     vertical-align: top;
                 }
                 th { color: #94a3b8; font-size: 0.8rem; letter-spacing: 0.05em; text-transform: uppercase; }
-                tr.highlight { background: rgba(248, 113, 113, 0.12); }
+                tr.highlight { background: rgba(239, 68, 68, 0.25); color: #fee2e2; }
+                tr.highlight td { border-bottom: 1px solid rgba(239, 68, 68, 0.35); }
                 .status-pill {
                     display: inline-flex;
                     align-items: center;
@@ -259,10 +301,14 @@ final class WebControlServer {
                 }
                 .log-entry { margin-bottom: 0.65rem; }
                 .log-entry time { color: #64748b; margin-right: 0.5rem; }
-                #mission-map { height: 320px; border-radius: 14px; overflow: hidden; }
+                .map-header { display:flex; justify-content: space-between; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+                .map-controls { display:flex; gap: 0.5rem; align-items: center; }
+                #mission-map { height: 320px; border-radius: 14px; overflow: hidden; transition: height 0.25s ease; }
+                #mission-map.expanded { height: 520px; }
                 .coordinate-toggle button { margin-right: 0.25rem; }
                 .coordinate-toggle button.active { background: rgba(37, 99, 235, 0.35); }
                 .actions button { margin-bottom: 0.25rem; }
+                .color-swatch { display:inline-block; width:0.75rem; height:0.75rem; border-radius:50%; margin-right:0.4rem; border:1px solid rgba(255,255,255,0.4); }
             </style>
         </head>
         <body>
@@ -288,9 +334,15 @@ final class WebControlServer {
             </section>
 
             <section class=\"card\">
-                <h2>Mission Map</h2>
+                <div class=\"map-header\">
+                    <h2>Mission Map</h2>
+                    <div class=\"map-controls\">
+                        <button class=\"secondary\" onclick=\"toggleMapSize()\">Toggle Fullscreen</button>
+                        <select id=\"mapFilterSelect\" onchange=\"setMapFilter(this.value)\"></select>
+                    </div>
+                </div>
                 <div id=\"mission-map\"></div>
-                <p class=\"subtle\" style=\"margin-top:0.75rem;\">Team and device fixes update automatically as new telemetry arrives.</p>
+                <p class=\"subtle\" style=\"margin-top:0.75rem;\">Team and device fixes update automatically as new telemetry arrives. Tap any marker for full details.</p>
             </section>
 
             <section class=\"card\">
@@ -298,10 +350,10 @@ final class WebControlServer {
                 <table>
                     <thead>
                         <tr>
-                            <th>Name</th>
-                            <th>Signal</th>
-                            <th>Identifiers</th>
-                            <th>Range</th>
+                            <th onclick=\"setSort('name')\">Name</th>
+                            <th onclick=\"setSort('signal')\">Signal</th>
+                            <th onclick=\"setSort('recent')\">Identifiers &amp; Last Seen</th>
+                            <th onclick=\"setSort('range')\">Range</th>
                             <th>Coordinate</th>
                             <th>Actions</th>
                         </tr>
@@ -323,16 +375,25 @@ final class WebControlServer {
                     maxZoom: 19
                 }).addTo(map);
                 const markerLayer = L.layerGroup().addTo(map);
+                const pathLayer = L.layerGroup().addTo(map);
+                const mapFilterState = { type: 'all', deviceId: null };
+                let latestDevices = [];
+                let latestTargetId = null;
+                let latestTeamLocation = null;
+                const sortState = { column: 'signal', ascending: false };
+                let mapExpanded = false;
 
                 async function fetchState() {
                     const response = await fetch('/api/state');
                     if (!response.ok) return;
                     const state = await response.json();
+                    latestTeamLocation = state.location || null;
                     updateScanStatus(state);
                     updateCoordinateButtons(state.coordinatePreference);
                     updateDeviceTable(state.devices, state.targetDeviceID);
+                    refreshFilterOptions(state.devices, state.targetDeviceID);
                     updateLog(state.logEntries);
-                    updateMap(state.location, state.devices, state.targetDeviceID);
+                    updateMap(latestTeamLocation, state.devices, state.targetDeviceID);
                 }
 
                 function updateScanStatus(state) {
@@ -346,19 +407,43 @@ final class WebControlServer {
                 }
 
                 function updateDeviceTable(devices, targetId) {
+                    latestDevices = devices || [];
+                    latestTargetId = targetId || null;
                     const tbody = document.getElementById('deviceTable');
-                    tbody.innerHTML = devices.map(device => {
-                        const isTarget = device.id === targetId;
+                    const sorted = [...latestDevices];
+                    sorted.sort((a, b) => {
+                        switch (sortState.column) {
+                            case 'name':
+                                return a.name.localeCompare(b.name);
+                            case 'range':
+                                const ar = a.estimatedRange ?? Number.POSITIVE_INFINITY;
+                                const br = b.estimatedRange ?? Number.POSITIVE_INFINITY;
+                                return ar - br;
+                            case 'recent':
+                                return new Date(b.lastSeen) - new Date(a.lastSeen);
+                            case 'signal':
+                            default:
+                                return (b.lastRSSI ?? -200) - (a.lastRSSI ?? -200);
+                        }
+                    });
+                    if (sortState.ascending) {
+                        sorted.reverse();
+                    }
+
+                    tbody.innerHTML = sorted.map(device => {
+                        const isTarget = device.id === latestTargetId;
                         const services = device.services?.map(s => s.id).join(', ') || '—';
                         const advertised = device.advertisedServiceUUIDs?.join(', ') || '—';
                         const range = device.estimatedRange ? `${device.estimatedRange.toFixed(1)} m` : '—';
-                        const coordinate = device.displayCoordinate || (device.locations?.length ? `${device.locations[device.locations.length-1].latitude.toFixed(5)}, ${device.locations[device.locations.length-1].longitude.toFixed(5)}` : '—');
+                        const latestFix = device.locations?.length ? device.locations[device.locations.length - 1] : null;
+                        const coordinate = device.displayCoordinate || (latestFix ? `${latestFix.latitude.toFixed(5)}, ${latestFix.longitude.toFixed(5)}` : '—');
                         const stateLabel = `<span class=\"status-pill ${device.state.toLowerCase()}\">${device.state}</span>`;
+                        const swatch = device.mapColorHex ? `<span class=\"color-swatch\" style=\"background:${device.mapColorHex}\"></span>` : '';
                         return `
                             <tr class='${isTarget ? 'highlight' : ''}'>
                                 <td>
                                     <div style=\"display:flex;flex-direction:column;gap:0.25rem;\">
-                                        <strong>${device.name}</strong>
+                                        <strong>${swatch}${device.name}</strong>
                                         <span class=\"subtle\">Manufacturer: ${device.manufacturerData || '—'}</span>
                                         <span class=\"subtle\">Advertised UUIDs: ${advertised}</span>
                                         <span class=\"subtle\">Services: ${services}</span>
@@ -397,6 +482,8 @@ final class WebControlServer {
 
                 function updateMap(teamLocation, devices, targetId) {
                     markerLayer.clearLayers();
+                    pathLayer.clearLayers();
+                    const filteredDevices = applyMapFilter(devices || [], targetId);
                     const points = [];
                     if (teamLocation) {
                         L.circleMarker([teamLocation.latitude, teamLocation.longitude], {
@@ -407,23 +494,136 @@ final class WebControlServer {
                         }).bindPopup('Team Position').addTo(markerLayer);
                         points.push([teamLocation.latitude, teamLocation.longitude]);
                     }
-                    devices.forEach(device => {
+                    filteredDevices.forEach(device => {
                         if (!device.locations || device.locations.length === 0) return;
+                        const color = device.mapColorHex || '#22d3ee';
+                        const historyColor = colorWithAlpha(color, 0.3);
                         const latest = device.locations[device.locations.length - 1];
                         const coordinate = device.displayCoordinate || `${latest.latitude.toFixed(5)}, ${latest.longitude.toFixed(5)}`;
-                        const marker = L.circleMarker([latest.latitude, latest.longitude], {
-                            radius: device.id === targetId ? 10 : 7,
-                            color: device.id === targetId ? '#f97316' : '#22d3ee',
-                            fillColor: device.id === targetId ? '#f97316' : '#22d3ee',
-                            fillOpacity: 0.55
+                        const path = device.locations.map(loc => [loc.latitude, loc.longitude]);
+                        if (path.length > 1) {
+                            L.polyline(path, {
+                                color,
+                                weight: device.id === targetId ? 4 : 2,
+                                opacity: 0.5
+                            }).addTo(pathLayer);
+                        }
+                        device.locations.slice(0, -1).forEach(loc => {
+                            L.circleMarker([loc.latitude, loc.longitude], {
+                                radius: 5,
+                                color: historyColor,
+                                fillColor: historyColor,
+                                fillOpacity: 0.35,
+                                weight: 1
+                            }).addTo(markerLayer);
+                        });
+                        const latestMarker = L.circleMarker([latest.latitude, latest.longitude], {
+                            radius: device.id === targetId ? 11 : 8,
+                            color,
+                            fillColor: color,
+                            fillOpacity: 0.7,
+                            weight: 2
                         }).bindPopup(`<strong>${device.name}</strong><br/>${coordinate}<br/>RSSI ${device.lastRSSI} dBm`);
-                        marker.addTo(markerLayer);
+                        latestMarker.addTo(markerLayer);
                         points.push([latest.latitude, latest.longitude]);
                     });
                     if (points.length > 0) {
                         const bounds = L.latLngBounds(points);
                         map.fitBounds(bounds.pad(0.25));
                     }
+                }
+
+                function refreshFilterOptions(devices, targetId) {
+                    const select = document.getElementById('mapFilterSelect');
+                    if (!select) return;
+                    const options = ['all', 'target'];
+                    (devices || []).forEach(device => options.push(`device:${device.id}`));
+                    const previous = select.value;
+                    select.innerHTML = options.map(option => {
+                        if (option === 'all') { return '<option value="all">Show All Geos</option>'; }
+                        if (option === 'target') {
+                            const label = targetId ? 'Target Only' : 'Target (none)';
+                            return `<option value="target">${label}</option>`;
+                        }
+                        const id = option.split(':')[1];
+                        const device = (devices || []).find(d => d.id === id);
+                        const name = device ? device.name : id;
+                        return `<option value="${option}">Device: ${name}</option>`;
+                    }).join('');
+                    const currentValue = mapFilterValue(targetId);
+                    if (options.includes(previous)) {
+                        select.value = previous;
+                    } else {
+                        select.value = currentValue;
+                        setMapFilter(currentValue);
+                    }
+                }
+
+                function setMapFilter(value) {
+                    if (value === 'target') {
+                        mapFilterState.type = 'target';
+                        mapFilterState.deviceId = null;
+                    } else if (value && value.startsWith('device:')) {
+                        mapFilterState.type = 'device';
+                        mapFilterState.deviceId = value.split(':')[1];
+                    } else {
+                        mapFilterState.type = 'all';
+                        mapFilterState.deviceId = null;
+                    }
+                    updateMap(latestTeamLocation, latestDevices, latestTargetId);
+                }
+
+                function mapFilterValue(targetId) {
+                    switch (mapFilterState.type) {
+                    case 'target':
+                        return 'target';
+                    case 'device':
+                        return mapFilterState.deviceId ? `device:${mapFilterState.deviceId}` : 'all';
+                    default:
+                        return 'all';
+                    }
+                }
+
+                function applyMapFilter(devices, targetId) {
+                    switch (mapFilterState.type) {
+                        case 'target':
+                            if (!targetId) return devices;
+                            return devices.filter(device => device.id === targetId);
+                        case 'device':
+                            if (!mapFilterState.deviceId) return devices;
+                            return devices.filter(device => device.id === mapFilterState.deviceId);
+                        default:
+                            return devices;
+                    }
+                }
+
+                function toggleMapSize() {
+                    mapExpanded = !mapExpanded;
+                    const mapElement = document.getElementById('mission-map');
+                    if (!mapElement) return;
+                    mapElement.classList.toggle('expanded', mapExpanded);
+                    setTimeout(() => map.invalidateSize(), 250);
+                }
+
+                function setSort(column) {
+                    if (sortState.column === column) {
+                        sortState.ascending = !sortState.ascending;
+                    } else {
+                        sortState.column = column;
+                        sortState.ascending = false;
+                    }
+                    updateDeviceTable(latestDevices, latestTargetId);
+                }
+
+                function colorWithAlpha(hex, alpha) {
+                    const fallback = '22d3ee';
+                    const parsed = (hex || `#${fallback}`).replace('#', '');
+                    const safe = (parsed.length === 6 && !Number.isNaN(parseInt(parsed, 16))) ? parsed : fallback;
+                    const bigint = parseInt(safe, 16);
+                    const r = (bigint >> 16) & 255;
+                    const g = (bigint >> 8) & 255;
+                    const b = bigint & 255;
+                    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
                 }
 
                 async function startScan(mode) {

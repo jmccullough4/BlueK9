@@ -144,6 +144,7 @@ struct BluetoothDevice: Identifiable, Hashable {
     var estimatedRange: Double?
     var locations: [DeviceGeo]
     var displayCoordinate: String?
+    var mapColorHex: String
 
     init(id: UUID,
          name: String?,
@@ -156,7 +157,8 @@ struct BluetoothDevice: Identifiable, Hashable {
          advertisedServiceUUIDs: [CBUUID] = [],
          estimatedRange: Double? = nil,
          locations: [DeviceGeo] = [],
-         displayCoordinate: String? = nil) {
+         displayCoordinate: String? = nil,
+         mapColorHex: String? = nil) {
         self.id = id
         self.name = name ?? "Unknown"
         self.lastRSSI = rssi
@@ -169,6 +171,7 @@ struct BluetoothDevice: Identifiable, Hashable {
         self.estimatedRange = estimatedRange
         self.locations = locations
         self.displayCoordinate = displayCoordinate
+        self.mapColorHex = mapColorHex ?? DeviceColorPalette.hexString(for: id)
     }
 
     var signalDescription: String {
@@ -182,7 +185,7 @@ struct BluetoothDevice: Identifiable, Hashable {
 
 extension BluetoothDevice: Codable {
     enum CodingKeys: String, CodingKey {
-        case id, name, lastRSSI, lastSeen, state, services, manufacturerData, hardwareAddress, advertisedServiceUUIDs, estimatedRange, locations, displayCoordinate, signalDescription
+        case id, name, lastRSSI, lastSeen, state, services, manufacturerData, hardwareAddress, advertisedServiceUUIDs, estimatedRange, locations, displayCoordinate, signalDescription, mapColorHex
     }
 
     init(from decoder: Decoder) throws {
@@ -199,7 +202,8 @@ extension BluetoothDevice: Codable {
         let estimatedRange = try container.decodeIfPresent(Double.self, forKey: .estimatedRange)
         let locations = try container.decodeIfPresent([DeviceGeo].self, forKey: .locations) ?? []
         let displayCoordinate = try container.decodeIfPresent(String.self, forKey: .displayCoordinate)
-        self.init(id: id, name: name, rssi: lastRSSI, lastSeen: lastSeen, state: state, services: services, manufacturerData: manufacturerData, hardwareAddress: hardwareAddress, advertisedServiceUUIDs: advertisedServiceUUIDs, estimatedRange: estimatedRange, locations: locations, displayCoordinate: displayCoordinate)
+        let mapColorHex = try container.decodeIfPresent(String.self, forKey: .mapColorHex)
+        self.init(id: id, name: name, rssi: lastRSSI, lastSeen: lastSeen, state: state, services: services, manufacturerData: manufacturerData, hardwareAddress: hardwareAddress, advertisedServiceUUIDs: advertisedServiceUUIDs, estimatedRange: estimatedRange, locations: locations, displayCoordinate: displayCoordinate, mapColorHex: mapColorHex)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -219,6 +223,7 @@ extension BluetoothDevice: Codable {
         }
         try container.encodeIfPresent(displayCoordinate, forKey: .displayCoordinate)
         try container.encode(signalDescription, forKey: .signalDescription)
+        try container.encode(mapColorHex, forKey: .mapColorHex)
     }
 }
 

@@ -24,6 +24,7 @@
 		A1000005A /* MissionLogShareButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000004A /* MissionLogShareButton.swift */; };
                 A1000005B /* SplashScreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000004B /* SplashScreenView.swift */; };
                 A1F00064 /* CoordinateFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1F00065 /* CoordinateFormatter.swift */; };
+                A1F00066 /* DeviceColorPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1F00067 /* DeviceColorPalette.swift */; };
 		A1000005C /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A1000004C /* LaunchScreen.storyboard */; };
 		ACDB12892EA2CA7E00D5D8A2 /* playstore.png in Resources */ = {isa = PBXBuildFile; fileRef = ACDB12872EA2CA7E00D5D8A2 /* playstore.png */; };
 		ACDB128A2EA2CA7E00D5D8A2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = ACDB12862EA2CA7E00D5D8A2 /* Assets.xcassets */; };
@@ -51,6 +52,7 @@
                 A1000004B /* SplashScreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplashScreenView.swift; sourceTree = "<group>"; };
                 A1000004C /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
                 A1F00065 /* CoordinateFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoordinateFormatter.swift; sourceTree = "<group>"; };
+                A1F00067 /* DeviceColorPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceColorPalette.swift; sourceTree = "<group>"; };
 		ACDB12852EA2CA7E00D5D8A2 /* appstore.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = appstore.png; sourceTree = "<group>"; };
 		ACDB12862EA2CA7E00D5D8A2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		ACDB12872EA2CA7E00D5D8A2 /* playstore.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = playstore.png; sourceTree = "<group>"; };
@@ -146,6 +148,7 @@
                         isa = PBXGroup;
                         children = (
                                 A1F00065 /* CoordinateFormatter.swift */,
+                                A1F00067 /* DeviceColorPalette.swift */,
                         );
                         path = Utilities;
                         sourceTree = "<group>";
@@ -249,6 +252,7 @@
                                 A1000005A /* MissionLogShareButton.swift in Sources */,
                                 A1000005B /* SplashScreenView.swift in Sources */,
                                 A1F00064 /* CoordinateFormatter.swift in Sources */,
+                                A1F00066 /* DeviceColorPalette.swift in Sources */,
                         );
 			runOnlyForDeploymentPostprocessing = 0;
 		};

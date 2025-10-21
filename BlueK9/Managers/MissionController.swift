@@ -179,6 +179,7 @@ final class MissionController: ObservableObject {
             merged.hardwareAddress = enrichedDevice.hardwareAddress
             merged.advertisedServiceUUIDs = enrichedDevice.advertisedServiceUUIDs
             merged.estimatedRange = enrichedDevice.estimatedRange
+            merged.mapColorHex = enrichedDevice.mapColorHex
             var locations = merged.locations
             locations.append(contentsOf: enrichedDevice.locations)
             var seen: Set<UUID> = []

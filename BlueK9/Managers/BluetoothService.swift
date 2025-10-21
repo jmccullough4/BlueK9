@@ -136,20 +136,32 @@ final class BluetoothService: NSObject {
     }
 
     private func buildDevice(from peripheral: CBPeripheral, rssi: NSNumber, advertisementData: [String: Any]) -> BluetoothDevice {
-        let manufacturerData = (advertisementData[CBAdvertisementDataManufacturerDataKey] as? Data)?.map { String(format: "%02hhX", $0) }.joined()
+        let manufacturerBytes = advertisementData[CBAdvertisementDataManufacturerDataKey] as? Data
+        let manufacturerData = manufacturerBytes?.map { String(format: "%02hhX", $0) }.joined()
         let name = peripheral.name ?? (advertisementData[CBAdvertisementDataLocalNameKey] as? String)
         var device = devices[peripheral.identifier] ?? BluetoothDevice(id: peripheral.identifier, name: name, rssi: rssi.intValue, hardwareAddress: peripheral.identifier.uuidString)
         device.name = name ?? device.name
         device.lastRSSI = rssi.intValue
         device.lastSeen = Date()
         device.manufacturerData = manufacturerData
-        device.hardwareAddress = peripheral.identifier.uuidString
+        if let address = bluetoothAddress(from: manufacturerBytes) {
+            device.hardwareAddress = address
+        } else {
+            device.hardwareAddress = peripheral.identifier.uuidString
+        }
+        device.mapColorHex = DeviceColorPalette.hexString(for: device.id)
         if let serviceUUIDs = advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID] {
             device.advertisedServiceUUIDs = serviceUUIDs
         }
         let txPower = (advertisementData[CBAdvertisementDataTxPowerLevelKey] as? NSNumber)?.intValue
         device.estimatedRange = estimateRange(forRSSI: rssi.intValue, txPower: txPower)
         return device
+    }
+
+    private func bluetoothAddress(from manufacturerData: Data?) -> String? {
+        guard let data = manufacturerData, data.count >= 6 else { return nil }
+        let addressBytes = data.suffix(6)
+        return addressBytes.map { String(format: "%02X", $0) }.joined(separator: ":")
     }
 
     private func estimateRange(forRSSI rssi: Int, txPower: Int?) -> Double? {

@@ -29,7 +29,7 @@ struct MissionDeviceRow: View {
                             .font(.caption2.bold())
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Color.red.opacity(0.2))
+                            .background(Color.red.opacity(0.25))
                             .clipShape(Capsule())
                     }
                 }
@@ -86,8 +86,14 @@ struct MissionDeviceRow: View {
             statusPill
         }
         .padding(16)
-        .background(Color(.secondarySystemBackground))
+        .background(isTarget ? Color.red.opacity(0.18) : Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            if isTarget {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.red, lineWidth: 2)
+            }
+        }
         .contextMenu {
             if isTarget {
                 Button("Clear Target", role: .destructive, action: onClearTarget)
@@ -97,19 +103,26 @@ struct MissionDeviceRow: View {
             Button("Active Geo", action: onActiveGeo)
             Button("Get Info", action: onGetInfo)
         }
+        .onLongPressGesture {
+            if isTarget {
+                onClearTarget()
+            } else {
+                onMarkTarget()
+            }
+        }
     }
 
     private var signalIndicator: some View {
         VStack {
             Image(systemName: "antenna.radiowaves.left.and.right")
                 .font(.title2)
-                .foregroundStyle(signalColor)
+                .foregroundStyle(accentColor)
             Text("\(device.lastRSSI) dBm")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
         .padding(12)
-        .background(signalColor.opacity(0.12))
+        .background(accentColor.opacity(0.15))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
@@ -139,6 +152,13 @@ struct MissionDeviceRow: View {
         case .connected: return .green
         case .failed: return .red
         }
+    }
+
+    private var accentColor: Color {
+        if isTarget {
+            return .red
+        }
+        return DeviceColorPalette.color(for: device.id)
     }
 
     private var coordinateText: String? {

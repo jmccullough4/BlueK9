@@ -9,6 +9,10 @@ struct MissionDashboardView: View {
     @EnvironmentObject private var controller: MissionController
     @Environment(\.openURL) private var openURL
     @State private var region = MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: 37.3349, longitude: -122.0090), span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01))
+    @State private var mapScope: MissionMapScope = .all
+    @State private var isMapExpanded = false
+    @State private var selectedDeviceForDetails: BluetoothDevice?
+    @State private var sortOrder: DeviceSortOrder = .signal
 
     var body: some View {
         ScrollView {
@@ -30,8 +34,26 @@ struct MissionDashboardView: View {
         .onChange(of: controller.devices) { _ in
             updateRegionToFitAnnotations()
         }
+        .onChange(of: mapScope) { _ in
+            updateRegionToFitAnnotations()
+        }
         .onAppear {
             updateRegionToFitAnnotations()
+        }
+        .fullScreenCover(isPresented: $isMapExpanded) {
+            MissionMapDetailView(region: $region, scope: $mapScope, selectedDevice: $selectedDeviceForDetails)
+                .environmentObject(controller)
+        }
+        .sheet(item: $selectedDeviceForDetails) { device in
+            MissionDeviceInfoSheet(
+                device: device,
+                coordinateMode: controller.coordinateDisplayMode,
+                isTarget: controller.targetDeviceID == device.id,
+                onMarkTarget: { controller.setTarget(device) },
+                onClearTarget: { controller.clearTarget() },
+                onActiveGeo: { controller.performActiveGeo(on: device.id) },
+                onGetInfo: { controller.requestDeviceInfo(for: device.id) }
+            )
         }
     }
 
@@ -195,6 +217,23 @@ struct MissionDashboardView: View {
                         .background(Color.blue.opacity(0.2))
                         .clipShape(Capsule())
                 }
+                Menu {
+                    Button("Show All") { mapScope = .all }
+                    if let targetID = controller.targetDeviceID, let target = controller.devices.first(where: { $0.id == targetID }) {
+                        Button("Target Only: \(target.name)") { mapScope = .target }
+                    }
+                    if !controller.devices.isEmpty {
+                        Section("Devices") {
+                            ForEach(controller.devices) { device in
+                                Button(device.name) { mapScope = .device(device.id) }
+                            }
+                        }
+                    }
+                } label: {
+                    Label(mapScope.menuTitle(with: controller, fallback: "Filter"), systemImage: "line.3.horizontal.decrease.circle")
+                        .labelStyle(.titleAndIcon)
+                }
+                .tint(.primary)
             }
             Picker("Coordinate Mode", selection: Binding(get: { controller.coordinateDisplayMode }, set: { controller.setCoordinateDisplayMode($0) })) {
                 ForEach(CoordinateDisplayMode.allCases) { mode in
@@ -205,27 +244,65 @@ struct MissionDashboardView: View {
 
             Map(coordinateRegion: $region, interactionModes: [.all], showsUserLocation: false, userTrackingMode: nil, annotationItems: mapAnnotations) { annotation in
                 MapAnnotation(coordinate: annotation.coordinate) {
-                    VStack(spacing: 4) {
-                        ZStack {
-                            Circle().fill(annotation.color.opacity(0.3)).frame(width: 44, height: 44)
-                            Circle().fill(annotation.color).frame(width: 16, height: 16)
-                        }
-                        if let label = annotation.label {
-                            Text(label)
+                    switch annotation.kind {
+                    case .team:
+                        VStack(spacing: 4) {
+                            ZStack {
+                                Circle().fill(Color.blue.opacity(0.28)).frame(width: 44, height: 44)
+                                Circle().fill(Color.blue).frame(width: 16, height: 16)
+                            }
+                            Text("Team")
                                 .font(.caption2.weight(.semibold))
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(.ultraThinMaterial)
                                 .clipShape(Capsule())
                         }
+                    case .latest(let device, let coordinateText):
+                        Button {
+                            selectedDeviceForDetails = device
+                        } label: {
+                            VStack(spacing: 4) {
+                                ZStack {
+                                    Circle().fill(annotation.color.opacity(0.32)).frame(width: 48, height: 48)
+                                    Circle().fill(annotation.color).frame(width: 20, height: 20)
+                                }
+                                Text("\(device.name)\n\(coordinateText)")
+                                    .multilineTextAlignment(.center)
+                                    .font(.caption2.weight(.semibold))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(.ultraThinMaterial)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    case .history:
+                        Circle()
+                            .fill(annotation.color)
+                            .frame(width: 10, height: 10)
                     }
                 }
             }
             .frame(height: 220)
             .clipShape(RoundedRectangle(cornerRadius: 16))
+            .overlay(alignment: .topTrailing) {
+                Button {
+                    isMapExpanded = true
+                } label: {
+                    Label("Expand", systemImage: "arrow.up.left.and.arrow.down.right")
+                        .labelStyle(.iconOnly)
+                        .padding(10)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Circle())
+                }
+                .padding(10)
+            }
             .overlay {
                 RoundedRectangle(cornerRadius: 16).strokeBorder(Color.blue.opacity(0.25), lineWidth: 1)
             }
+            .mapStyle(.standard)
+            .gesture(TapGesture().onEnded { isMapExpanded = true })
         }
         .padding()
         .background(.ultraThickMaterial)
@@ -275,27 +352,46 @@ struct MissionDashboardView: View {
         return "Remote console: http://\(ip):8080"
     }
 
-    private var mapAnnotations: [MissionMapAnnotation] {
-        var annotations: [MissionMapAnnotation] = []
-        if let coordinate = controller.location {
-            annotations.append(MissionMapAnnotation(coordinate: coordinate, label: "Team", color: .blue, kind: .user))
-        }
-        for device in controller.devices {
-            guard let geo = device.lastKnownLocation else { continue }
-            let isTarget = controller.targetDeviceID == device.id
-            let label = annotationLabel(for: device, at: geo)
-            annotations.append(MissionMapAnnotation(coordinate: geo.coordinate, label: label, color: isTarget ? .red : .teal, kind: .device(device)))
-        }
-        return annotations
+    private var mapData: MissionMapData {
+        MissionMapData(
+            teamCoordinate: controller.location,
+            devices: controller.devices,
+            coordinateMode: controller.coordinateDisplayMode,
+            targetDeviceID: controller.targetDeviceID,
+            scope: mapScope
+        )
     }
 
-    private func annotationLabel(for device: BluetoothDevice, at geo: DeviceGeo) -> String {
-        let coordinateString = device.displayCoordinate ?? CoordinateFormatter.shared.string(from: geo.coordinate, mode: controller.coordinateDisplayMode)
-        return "\(device.name)\n\(coordinateString)"
+    private var mapAnnotations: [MissionMapAnnotation] {
+        mapData.annotations
+    }
+
+    private var mapCoordinates: [CLLocationCoordinate2D] {
+        mapData.coordinates
+    }
+
+    private var sortedDevices: [BluetoothDevice] {
+        switch sortOrder {
+        case .signal:
+            return controller.devices.sorted { $0.lastRSSI > $1.lastRSSI }
+        case .recent:
+            return controller.devices.sorted { $0.lastSeen > $1.lastSeen }
+        case .name:
+            return controller.devices.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        case .range:
+            return controller.devices.sorted {
+                let lhs = $0.estimatedRange ?? .greatestFiniteMagnitude
+                let rhs = $1.estimatedRange ?? .greatestFiniteMagnitude
+                if lhs == rhs {
+                    return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+                }
+                return lhs < rhs
+            }
+        }
     }
 
     private func updateRegionToFitAnnotations() {
-        let coordinates = mapAnnotations.map { $0.coordinate }
+        let coordinates = mapCoordinates
         guard !coordinates.isEmpty else { return }
         let minLat = coordinates.map { $0.latitude }.min() ?? region.center.latitude
         let maxLat = coordinates.map { $0.latitude }.max() ?? region.center.latitude
@@ -310,7 +406,14 @@ struct MissionDashboardView: View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Devices", systemImage: "dot.radiowaves.left.and.right")
                 .font(.title2.bold())
-            ForEach(controller.devices) { device in
+            Picker("Sort", selection: $sortOrder) {
+                ForEach(DeviceSortOrder.allCases) { option in
+                    Text(option.displayName).tag(option)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            ForEach(sortedDevices) { device in
                 MissionDeviceRow(device: device, coordinateMode: controller.coordinateDisplayMode, isTarget: controller.targetDeviceID == device.id, onMarkTarget: { controller.setTarget(device) }, onClearTarget: { controller.clearTarget() }, onActiveGeo: { controller.performActiveGeo(on: device.id) }, onGetInfo: { controller.requestDeviceInfo(for: device.id) })
             }
             if controller.devices.isEmpty {
@@ -388,9 +491,312 @@ struct MissionSecondaryButtonStyle: ButtonStyle {
     }
 }
 
-private struct MissionLocationPin: Identifiable {
-    let id = UUID()
+private struct MissionMapAnnotation: Identifiable {
+    enum Kind {
+        case team
+        case latest(device: BluetoothDevice, coordinateText: String)
+        case history(deviceID: UUID)
+    }
+
+    static let teamIdentifier = UUID()
+
+    let id: UUID
     let coordinate: CLLocationCoordinate2D
+    let color: Color
+    let kind: Kind
+
+    init(id: UUID = UUID(), coordinate: CLLocationCoordinate2D, color: Color, kind: Kind) {
+        self.id = id
+        self.coordinate = coordinate
+        self.color = color
+        self.kind = kind
+    }
+}
+
+private struct MissionMapData {
+    let annotations: [MissionMapAnnotation]
+    let coordinates: [CLLocationCoordinate2D]
+
+    init(teamCoordinate: CLLocationCoordinate2D?, devices: [BluetoothDevice], coordinateMode: CoordinateDisplayMode, targetDeviceID: UUID?, scope: MissionMapScope) {
+        var annotations: [MissionMapAnnotation] = []
+        var coordinates: [CLLocationCoordinate2D] = []
+
+        if let teamCoordinate {
+            annotations.append(MissionMapAnnotation(id: MissionMapAnnotation.teamIdentifier, coordinate: teamCoordinate, color: .blue, kind: .team))
+            coordinates.append(teamCoordinate)
+        }
+
+        let filteredDevices = scope.filteredDevices(from: devices, targetID: targetDeviceID)
+
+        for device in filteredDevices {
+            guard !device.locations.isEmpty else { continue }
+            let sortedLocations = device.locations.sorted(by: { $0.timestamp < $1.timestamp })
+            guard let latest = sortedLocations.last else { continue }
+            let baseColor: Color = (targetDeviceID == device.id) ? .red : DeviceColorPalette.color(for: device.id)
+            let historyColor = baseColor.opacity(0.35)
+
+            for geo in sortedLocations {
+                coordinates.append(geo.coordinate)
+                if geo.id == latest.id {
+                    let coordinateText = device.displayCoordinate ?? CoordinateFormatter.shared.string(from: geo.coordinate, mode: coordinateMode)
+                    annotations.append(MissionMapAnnotation(id: geo.id, coordinate: geo.coordinate, color: baseColor, kind: .latest(device: device, coordinateText: coordinateText)))
+                } else {
+                    annotations.append(MissionMapAnnotation(id: geo.id, coordinate: geo.coordinate, color: historyColor, kind: .history(deviceID: device.id)))
+                }
+            }
+        }
+
+        self.annotations = annotations
+        self.coordinates = coordinates
+    }
+}
+
+private enum MissionMapScope: Hashable, Identifiable {
+    case all
+    case target
+    case device(UUID)
+
+    var id: String {
+        switch self {
+        case .all:
+            return "all"
+        case .target:
+            return "target"
+        case .device(let id):
+            return "device-\(id.uuidString)"
+        }
+    }
+
+    func filteredDevices(from devices: [BluetoothDevice], targetID: UUID?) -> [BluetoothDevice] {
+        switch self {
+        case .all:
+            return devices
+        case .target:
+            guard let targetID, let target = devices.first(where: { $0.id == targetID }) else { return devices }
+            return [target]
+        case .device(let id):
+            if let device = devices.first(where: { $0.id == id }) {
+                return [device]
+            }
+            return devices
+        }
+    }
+
+    func menuTitle(with controller: MissionController, fallback: String) -> String {
+        switch self {
+        case .all:
+            return "All Geos"
+        case .target:
+            if let targetID = controller.targetDeviceID, let device = controller.devices.first(where: { $0.id == targetID }) {
+                return "Target: \(device.name)"
+            }
+            return fallback
+        case .device(let id):
+            if let device = controller.devices.first(where: { $0.id == id }) {
+                return device.name
+            }
+            return fallback
+        }
+    }
+}
+
+private enum DeviceSortOrder: String, CaseIterable, Identifiable {
+    case signal
+    case recent
+    case name
+    case range
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .signal:
+            return "Signal"
+        case .recent:
+            return "Recent"
+        case .name:
+            return "Name"
+        case .range:
+            return "Range"
+        }
+    }
+}
+
+private struct MissionMapDetailView: View {
+    @EnvironmentObject private var controller: MissionController
+    @Environment(\.dismiss) private var dismiss
+    @Binding var region: MKCoordinateRegion
+    @Binding var scope: MissionMapScope
+    @Binding var selectedDevice: BluetoothDevice?
+
+    private var mapData: MissionMapData {
+        MissionMapData(
+            teamCoordinate: controller.location,
+            devices: controller.devices,
+            coordinateMode: controller.coordinateDisplayMode,
+            targetDeviceID: controller.targetDeviceID,
+            scope: scope
+        )
+    }
+
+    var body: some View {
+        NavigationStack {
+            Map(coordinateRegion: $region, interactionModes: [.all], showsUserLocation: false, userTrackingMode: nil, annotationItems: mapData.annotations) { annotation in
+                MapAnnotation(coordinate: annotation.coordinate) {
+                    switch annotation.kind {
+                    case .team:
+                        VStack(spacing: 6) {
+                            Circle()
+                                .fill(Color.blue)
+                                .frame(width: 22, height: 22)
+                            Text("Team")
+                                .font(.caption.weight(.semibold))
+                                .padding(6)
+                                .background(.ultraThinMaterial)
+                                .clipShape(Capsule())
+                        }
+                    case .latest(let device, let coordinateText):
+                        Button {
+                            selectedDevice = device
+                        } label: {
+                            VStack(spacing: 6) {
+                                Circle()
+                                    .fill(annotation.color)
+                                    .frame(width: 26, height: 26)
+                                    .shadow(color: annotation.color.opacity(0.5), radius: 6, x: 0, y: 3)
+                                Text("\(device.name)\n\(coordinateText)")
+                                    .multilineTextAlignment(.center)
+                                    .font(.caption.weight(.semibold))
+                                    .padding(6)
+                                    .background(.ultraThinMaterial)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    case .history:
+                        Circle()
+                            .fill(annotation.color)
+                            .frame(width: 12, height: 12)
+                    }
+                }
+            }
+            .mapStyle(.standard)
+            .ignoresSafeArea()
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Close") { dismiss() }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Menu {
+                        Button("Show All") { scope = .all }
+                        if let targetID = controller.targetDeviceID, let target = controller.devices.first(where: { $0.id == targetID }) {
+                            Button("Target Only: \(target.name)") { scope = .target }
+                        }
+                        if !controller.devices.isEmpty {
+                            Section("Devices") {
+                                ForEach(controller.devices) { device in
+                                    Button(device.name) { scope = .device(device.id) }
+                                }
+                            }
+                        }
+                    } label: {
+                        Label(scope.menuTitle(with: controller, fallback: "Filter"), systemImage: "line.3.horizontal.decrease.circle")
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct MissionDeviceInfoSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let device: BluetoothDevice
+    let coordinateMode: CoordinateDisplayMode
+    let isTarget: Bool
+    let onMarkTarget: () -> Void
+    let onClearTarget: () -> Void
+    let onActiveGeo: () -> Void
+    let onGetInfo: () -> Void
+
+    private var coordinateText: String? {
+        if let display = device.displayCoordinate {
+            return display
+        }
+        guard let location = device.lastKnownLocation?.coordinate else { return nil }
+        return CoordinateFormatter.shared.string(from: location, mode: coordinateMode)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    infoRow(label: "Bluetooth Address", value: device.hardwareAddress)
+                    infoRow(label: "UUID", value: device.id.uuidString)
+                    infoRow(label: "Last RSSI", value: "\(device.lastRSSI) dBm")
+                    if let range = device.estimatedRange {
+                        infoRow(label: "Estimated Range", value: String(format: "%.1f m", range))
+                    }
+                    if let coordinateText {
+                        infoRow(label: "Coordinate", value: coordinateText)
+                    }
+                    if let manufacturer = device.manufacturerData {
+                        infoRow(label: "Manufacturer", value: manufacturer)
+                    }
+                    if !device.advertisedServiceUUIDs.isEmpty {
+                        infoRow(label: "Advertised UUIDs", value: device.advertisedServiceUUIDs.map { $0.uuidString }.joined(separator: ", "))
+                    }
+                    if !device.services.isEmpty {
+                        infoRow(label: "Services", value: device.services.map { $0.id.uuidString }.joined(separator: ", "))
+                    }
+
+                    Divider()
+
+                    if isTarget {
+                        Button(role: .destructive, action: onClearTarget) {
+                            Label("Clear Target", systemImage: "xmark.circle")
+                        }
+                        .buttonStyle(.borderedProminent)
+                    } else {
+                        Button(action: onMarkTarget) {
+                            Label("Mark as Target", systemImage: "scope")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
+                    }
+
+                    HStack {
+                        Button(action: onActiveGeo) {
+                            Label("Active Geo", systemImage: "bolt")
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button(action: onGetInfo) {
+                            Label("Get Info", systemImage: "info.circle")
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+                .padding()
+            }
+            .navigationTitle(device.name)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private func infoRow(label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label.uppercased())
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.body.weight(.semibold))
+                .textSelection(.enabled)
+        }
+    }
 }
 
 private struct MissionMapAnnotation: Identifiable {
