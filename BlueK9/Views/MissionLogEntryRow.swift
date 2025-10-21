@@ -58,8 +58,7 @@ struct MissionLogEntryRow: View {
     }
 }
 
-#Preview {
+#Preview(traits: .sizeThatFitsLayout) {
     MissionLogEntryRow(entry: MissionLogEntry(type: .deviceDiscovered, message: "Responder Beacon", metadata: ["rssi": "-42"]))
         .padding()
-        .previewLayout(.sizeThatFits)
 }
