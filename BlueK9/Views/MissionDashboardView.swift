@@ -31,10 +31,10 @@ struct MissionDashboardView: View {
                 region.center = coordinate
             }
         }
-        .onChangeCompatibility(of: controller.devices) {
+        .onChange(of: controller.devices, initial: false) { _, _ in
             updateRegionToFitAnnotations()
         }
-        .onChangeCompatibility(of: mapScope) {
+        .onChange(of: mapScope, initial: false) { _, _ in
             updateRegionToFitAnnotations()
         }
         .onAppear {
@@ -323,25 +323,11 @@ struct MissionDashboardView: View {
 
     @ViewBuilder
     private var missionMapContent: some View {
-        if #available(iOS 17.0, *) {
-            MissionCompactMapView17(
-                region: $region,
-                annotations: mapAnnotations,
-                onSelectDevice: { selectedDeviceForDetails = $0 }
-            )
-        } else {
-            Map(
-                coordinateRegion: $region,
-                interactionModes: [.all],
-                showsUserLocation: false,
-                userTrackingMode: nil,
-                annotationItems: mapAnnotations
-            ) { annotation in
-                MapAnnotation(coordinate: annotation.coordinate) {
-                    compactAnnotationContent(for: annotation)
-                }
-            }
-        }
+        MissionCompactMapView(
+            region: $region,
+            annotations: mapAnnotations,
+            onSelectDevice: { selectedDeviceForDetails = $0 }
+        )
     }
 
     private var mapAnnotations: [MissionMapAnnotation] {
@@ -350,48 +336,6 @@ struct MissionDashboardView: View {
 
     private var mapCoordinates: [CLLocationCoordinate2D] {
         mapData.coordinates
-    }
-
-    @ViewBuilder
-    private func compactAnnotationContent(for annotation: MissionMapAnnotation) -> some View {
-        switch annotation.kind {
-        case .team:
-            VStack(spacing: 4) {
-                ZStack {
-                    Circle().fill(Color.blue.opacity(0.28)).frame(width: 44, height: 44)
-                    Circle().fill(Color.blue).frame(width: 16, height: 16)
-                }
-                Text("Team")
-                    .font(.caption2.weight(.semibold))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(.ultraThinMaterial)
-                    .clipShape(Capsule())
-            }
-        case .latest(let device, let coordinateText):
-            Button {
-                selectedDeviceForDetails = device
-            } label: {
-                VStack(spacing: 4) {
-                    ZStack {
-                        Circle().fill(annotation.color.opacity(0.32)).frame(width: 48, height: 48)
-                        Circle().fill(annotation.color).frame(width: 20, height: 20)
-                    }
-                    Text("\(device.name)\n\(coordinateText)")
-                        .multilineTextAlignment(.center)
-                        .font(.caption2.weight(.semibold))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(.ultraThinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                }
-            }
-            .buttonStyle(.plain)
-        case .history:
-            Circle()
-                .fill(annotation.color)
-                .frame(width: 10, height: 10)
-        }
     }
 
     private var sortedDevices: [BluetoothDevice] {
@@ -666,64 +610,11 @@ private struct MissionMapDetailView: View {
 
     @ViewBuilder
     private var mapViewContent: some View {
-        if #available(iOS 17.0, *) {
-            MissionDetailMapView17(
-                region: $region,
-                annotations: mapData.annotations,
-                selectedDevice: $selectedDevice
-            )
-        } else {
-            Map(
-                coordinateRegion: $region,
-                interactionModes: [.all],
-                showsUserLocation: false,
-                userTrackingMode: nil,
-                annotationItems: mapData.annotations
-            ) { annotation in
-                MapAnnotation(coordinate: annotation.coordinate) {
-                    detailAnnotationContent(for: annotation)
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func detailAnnotationContent(for annotation: MissionMapAnnotation) -> some View {
-        switch annotation.kind {
-        case .team:
-            VStack(spacing: 6) {
-                Circle()
-                    .fill(Color.blue)
-                    .frame(width: 22, height: 22)
-                Text("Team")
-                    .font(.caption.weight(.semibold))
-                    .padding(6)
-                    .background(.ultraThinMaterial)
-                    .clipShape(Capsule())
-            }
-        case .latest(let device, let coordinateText):
-            Button {
-                selectedDevice = device
-            } label: {
-                VStack(spacing: 6) {
-                    Circle()
-                        .fill(annotation.color)
-                        .frame(width: 26, height: 26)
-                        .shadow(color: annotation.color.opacity(0.5), radius: 6, x: 0, y: 3)
-                    Text("\(device.name)\n\(coordinateText)")
-                        .multilineTextAlignment(.center)
-                        .font(.caption.weight(.semibold))
-                        .padding(6)
-                        .background(.ultraThinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                }
-            }
-            .buttonStyle(.plain)
-        case .history:
-            Circle()
-                .fill(annotation.color)
-                .frame(width: 12, height: 12)
-        }
+        MissionDetailMapView(
+            region: $region,
+            annotations: mapData.annotations,
+            selectedDevice: $selectedDevice
+        )
     }
 
     var body: some View {
@@ -870,19 +761,20 @@ private func regionsAreApproximatelyEqual(_ lhs: MKCoordinateRegion, _ rhs: MKCo
         abs(lhs.span.longitudeDelta - rhs.span.longitudeDelta) < threshold
 }
 
-@available(iOS 17.0, *)
-private struct MissionCompactMapView17: View {
+private struct MissionCompactMapView: View {
     @Binding var region: MKCoordinateRegion
     let annotations: [MissionMapAnnotation]
     let onSelectDevice: (BluetoothDevice) -> Void
 
     @State private var cameraPosition: MapCameraPosition
+    @State private var lastCameraRegion: MKCoordinateRegion
 
     init(region: Binding<MKCoordinateRegion>, annotations: [MissionMapAnnotation], onSelectDevice: @escaping (BluetoothDevice) -> Void) {
         _region = region
         self.annotations = annotations
         self.onSelectDevice = onSelectDevice
         _cameraPosition = State(initialValue: .region(region.wrappedValue))
+        _lastCameraRegion = State(initialValue: region.wrappedValue)
     }
 
     var body: some View {
@@ -895,20 +787,17 @@ private struct MissionCompactMapView17: View {
         }
         .onMapCameraChange { context in
             let newRegion = context.region
-            if !regionsAreApproximatelyEqual(newRegion, region) {
+            if !regionsAreApproximatelyEqual(newRegion, lastCameraRegion) {
+                lastCameraRegion = newRegion
                 region = newRegion
             }
         }
-        .onChangeCompatibility(of: RegionSignature(region)) {
-            guard let current = cameraPosition.regionValue else {
-                cameraPosition = .region(region)
+        .onChange(of: RegionSignature(region), initial: false) { _, _ in
+            if regionsAreApproximatelyEqual(region, lastCameraRegion) {
                 return
             }
 
-            if regionsAreApproximatelyEqual(current, region) {
-                return
-            }
-
+            lastCameraRegion = region
             cameraPosition = .region(region)
         }
     }
@@ -956,19 +845,20 @@ private struct MissionCompactMapView17: View {
     }
 }
 
-@available(iOS 17.0, *)
-private struct MissionDetailMapView17: View {
+private struct MissionDetailMapView: View {
     @Binding var region: MKCoordinateRegion
     let annotations: [MissionMapAnnotation]
     @Binding var selectedDevice: BluetoothDevice?
 
     @State private var cameraPosition: MapCameraPosition
+    @State private var lastCameraRegion: MKCoordinateRegion
 
     init(region: Binding<MKCoordinateRegion>, annotations: [MissionMapAnnotation], selectedDevice: Binding<BluetoothDevice?>) {
         _region = region
         self.annotations = annotations
         _selectedDevice = selectedDevice
         _cameraPosition = State(initialValue: .region(region.wrappedValue))
+        _lastCameraRegion = State(initialValue: region.wrappedValue)
     }
 
     var body: some View {
@@ -981,20 +871,17 @@ private struct MissionDetailMapView17: View {
         }
         .onMapCameraChange { context in
             let newRegion = context.region
-            if !regionsAreApproximatelyEqual(newRegion, region) {
+            if !regionsAreApproximatelyEqual(newRegion, lastCameraRegion) {
+                lastCameraRegion = newRegion
                 region = newRegion
             }
         }
-        .onChangeCompatibility(of: RegionSignature(region)) {
-            guard let current = cameraPosition.regionValue else {
-                cameraPosition = .region(region)
+        .onChange(of: RegionSignature(region), initial: false) { _, _ in
+            if regionsAreApproximatelyEqual(region, lastCameraRegion) {
                 return
             }
 
-            if regionsAreApproximatelyEqual(current, region) {
-                return
-            }
-
+            lastCameraRegion = region
             cameraPosition = .region(region)
         }
     }
@@ -1036,41 +923,6 @@ private struct MissionDetailMapView17: View {
                 .fill(annotation.color)
                 .frame(width: 12, height: 12)
         }
-    }
-}
-
-@available(iOS 17.0, *)
-private extension MapCameraPosition {
-    var regionValue: MKCoordinateRegion? {
-        switch self {
-        case let .region(region):
-            return region
-        default:
-            return nil
-        }
-    }
-}
-
-private struct OnChangeCompatibilityModifier<Value: Equatable>: ViewModifier {
-    let value: Value
-    let action: () -> Void
-
-    func body(content: Content) -> some View {
-        if #available(iOS 17.0, *) {
-            content.onChange(of: value, initial: false) { _, _ in
-                action()
-            }
-        } else {
-            content.onChange(of: value) { _ in
-                action()
-            }
-        }
-    }
-}
-
-private extension View {
-    func onChangeCompatibility<Value: Equatable>(of value: Value, action: @escaping () -> Void) -> some View {
-        modifier(OnChangeCompatibilityModifier(value: value, action: action))
     }
 }
 
