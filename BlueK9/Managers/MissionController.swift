@@ -253,6 +253,43 @@ final class MissionController: ObservableObject {
         )
     }
 
+    @MainActor
+    private func makeMissionStateSnapshot() -> MissionState {
+        let trimmedDevices = devices.map { device -> BluetoothDevice in
+            var copy = device
+            if copy.locations.count > webLocationHistoryLimit {
+                copy.locations = Array(copy.locations.suffix(webLocationHistoryLimit))
+            }
+            return copy
+        }
+
+        let limitedLog = Array(logEntries.suffix(webLogLimit))
+
+        return MissionState(
+            scanMode: scanMode,
+            isScanning: isScanning,
+            location: location,
+            locationAccuracy: locationAccuracy,
+            devices: trimmedDevices,
+            logEntries: limitedLog,
+            coordinatePreference: coordinateDisplayMode,
+            targetDeviceID: targetDeviceID
+        )
+    }
+
+    private func emptyMissionState() -> MissionState {
+        MissionState(
+            scanMode: .passive,
+            isScanning: false,
+            location: nil,
+            locationAccuracy: nil,
+            devices: [],
+            logEntries: [],
+            coordinatePreference: .latitudeLongitude,
+            targetDeviceID: nil
+        )
+    }
+
     private func startWebServer() {
         let server = WebControlServer(
             stateProvider: { [weak self] in
