@@ -28,7 +28,18 @@
 </array>
 <key>UISupportedInterfaceOrientations</key>
 <array>
-<string>UIInterfaceOrientationPortrait</string>
+    <string>UIInterfaceOrientationPortrait</string>
+</array>
+<key>UISupportedInterfaceOrientations~ipad</key>
+<array>
+    <string>UIInterfaceOrientationPortrait</string>
+    <string>UIInterfaceOrientationPortraitUpsideDown</string>
+    <string>UIInterfaceOrientationLandscapeLeft</string>
+    <string>UIInterfaceOrientationLandscapeRight</string>
+</array>
+<key>UIBackgroundModes</key>
+<array>
+<string>location</string>
 </array>
 <key>NSLocationWhenInUseUsageDescription</key>
 <string>Location access is required to show the mission location on the map.</string>
