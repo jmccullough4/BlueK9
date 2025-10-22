@@ -1083,12 +1083,37 @@ private struct RegionSignature: Equatable {
     }
 }
 
+private struct CameraPositionSignature: Equatable {
+    private enum Kind: Equatable {
+        case region(RegionSignature)
+        case other
+    }
+
+    private let kind: Kind
+
+    init(_ position: MapCameraPosition) {
+        switch position {
+        case .region(let region):
+            kind = .region(RegionSignature(region))
+        default:
+            kind = .other
+        }
+    }
+}
+
 private func regionsAreApproximatelyEqual(_ lhs: MKCoordinateRegion, _ rhs: MKCoordinateRegion) -> Bool {
     let threshold = 1e-6
     return abs(lhs.center.latitude - rhs.center.latitude) < threshold &&
         abs(lhs.center.longitude - rhs.center.longitude) < threshold &&
         abs(lhs.span.latitudeDelta - rhs.span.latitudeDelta) < threshold &&
         abs(lhs.span.longitudeDelta - rhs.span.longitudeDelta) < threshold
+}
+
+private func region(from position: MapCameraPosition) -> MKCoordinateRegion? {
+    if case .region(let region) = position {
+        return region
+    }
+    return nil
 }
 
 private struct MissionCompactMapView: View {
@@ -1099,6 +1124,7 @@ private struct MissionCompactMapView: View {
 
     @State private var cameraPosition: MapCameraPosition
     @State private var lastCameraRegion: MKCoordinateRegion
+    @State private var isProgrammaticCameraChange = false
 
     init(region: Binding<MKCoordinateRegion>, annotations: [MissionMapAnnotation], onSelectDevice: @escaping (BluetoothDevice) -> Void, onUserInteraction: @escaping () -> Void) {
         _region = region
@@ -1118,9 +1144,12 @@ private struct MissionCompactMapView: View {
             }
         }
         .mapStyle(.standard)
-        .onMapCameraChange(frequency: .continuous) { context in
-            let newRegion = context.region
-            if context.reason == .userInteraction {
+        .onChange(of: CameraPositionSignature(cameraPosition), initial: false) { _, _ in
+            guard let newRegion = region(from: cameraPosition) else { return }
+
+            if isProgrammaticCameraChange {
+                isProgrammaticCameraChange = false
+            } else {
                 onUserInteraction()
             }
 
@@ -1137,6 +1166,7 @@ private struct MissionCompactMapView: View {
             }
 
             lastCameraRegion = region
+            isProgrammaticCameraChange = true
             cameraPosition = .region(region)
         }
     }
@@ -1209,6 +1239,7 @@ private struct MissionDetailMapView: View {
 
     @State private var cameraPosition: MapCameraPosition
     @State private var lastCameraRegion: MKCoordinateRegion
+    @State private var isProgrammaticCameraChange = false
 
     init(region: Binding<MKCoordinateRegion>, annotations: [MissionMapAnnotation], selectedDevice: Binding<BluetoothDevice?>, onUserInteraction: @escaping () -> Void, onSelectDevice: @escaping (BluetoothDevice) -> Void) {
         _region = region
@@ -1229,9 +1260,12 @@ private struct MissionDetailMapView: View {
             }
         }
         .mapStyle(.standard)
-        .onMapCameraChange(frequency: .continuous) { context in
-            let newRegion = context.region
-            if context.reason == .userInteraction {
+        .onChange(of: CameraPositionSignature(cameraPosition), initial: false) { _, _ in
+            guard let newRegion = region(from: cameraPosition) else { return }
+
+            if isProgrammaticCameraChange {
+                isProgrammaticCameraChange = false
+            } else {
                 onUserInteraction()
             }
 
@@ -1248,6 +1282,7 @@ private struct MissionDetailMapView: View {
             }
 
             lastCameraRegion = region
+            isProgrammaticCameraChange = true
             cameraPosition = .region(region)
         }
     }
