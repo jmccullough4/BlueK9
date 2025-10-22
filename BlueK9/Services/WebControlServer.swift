@@ -87,8 +87,8 @@ private let webConsoleHTML: String = #"""
             vertical-align: top;
         }
         th { color: #94a3b8; font-size: 0.8rem; letter-spacing: 0.05em; text-transform: uppercase; cursor: pointer; }
-        tr.highlight { background: rgba(220, 38, 38, 0.45); color: #fee2e2; }
-        tr.highlight td { border-bottom: 1px solid rgba(220, 38, 38, 0.55); }
+        tr.highlight { background: rgba(239, 68, 68, 0.65); color: #fff5f5; }
+        tr.highlight td { border-bottom: 1px solid rgba(239, 68, 68, 0.75); }
         .status-pill {
             display: inline-flex;
             align-items: center;
@@ -104,6 +104,58 @@ private let webConsoleHTML: String = #"""
         .status-pill.active {
             background: rgba(37, 99, 235, 0.35);
             color: #dbeafe;
+        }
+        .mission-scan-controls {
+            display:flex;
+            flex-wrap:wrap;
+            gap:0.75rem;
+            align-items:stretch;
+        }
+        .mission-scan-actions {
+            display:flex;
+            flex-wrap:wrap;
+            gap:0.5rem;
+            align-items:center;
+        }
+        .mission-scan-actions button { margin-right: 0; }
+        .scan-indicator {
+            display:flex;
+            align-items:center;
+            gap:0.75rem;
+            padding:0.75rem 1rem;
+            border-radius:16px;
+            background: rgba(148, 163, 184, 0.12);
+            border:1px solid rgba(148, 163, 184, 0.25);
+            min-width: 240px;
+            flex:1 1 260px;
+            transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+        }
+        .scan-indicator .scan-dot {
+            width:0.85rem;
+            height:0.85rem;
+            border-radius:50%;
+            background:#94a3b8;
+            box-shadow:none;
+        }
+        .scan-headline { font-weight: 600; }
+        .scan-subtitle { font-size: 0.8rem; color: #94a3b8; }
+        .scan-indicator[data-state="active"] {
+            background: rgba(37, 99, 235, 0.18);
+            border-color: rgba(37, 99, 235, 0.35);
+            box-shadow: 0 12px 35px rgba(37, 99, 235, 0.22);
+        }
+        .scan-indicator[data-state="active"] .scan-dot {
+            background: #2563eb;
+            box-shadow: 0 0 14px rgba(37, 99, 235, 0.75);
+        }
+        .scan-indicator[data-state="passive"] {
+            background: rgba(45, 212, 191, 0.18);
+            border-color: rgba(45, 212, 191, 0.35);
+            box-shadow: 0 12px 35px rgba(13, 148, 136, 0.22);
+        }
+        .scan-indicator[data-state="passive"] .scan-dot {
+            background: #2dd4bf;
+            box-shadow: 0 0 14px rgba(45, 212, 191, 0.75);
         }
         .target-pill {
             display: inline-flex;
@@ -141,6 +193,26 @@ private let webConsoleHTML: String = #"""
         }
         .map-controls select {
             min-width: 120px;
+        }
+        .map-button-group {
+            display:flex;
+            gap:0.4rem;
+            flex-wrap:wrap;
+            align-items:center;
+        }
+        .map-tool {
+            width:42px;
+            height:42px;
+            border-radius:14px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            font-size:1rem;
+            padding:0;
+        }
+        .map-tool.active {
+            background: rgba(37, 99, 235, 0.35);
+            color: #dbeafe;
         }
         .device-header, .log-header {
             display:flex;
@@ -192,11 +264,19 @@ private let webConsoleHTML: String = #"""
 
     <section class="card">
         <h2>Mission Systems</h2>
-        <div style="display:flex;flex-wrap:wrap;gap:0.75rem;align-items:center;">
-            <button onclick="startScan('passive')">Start Passive</button>
-            <button onclick="startScan('active')">Start Active</button>
-            <button class="secondary" onclick="stopScan()">Stop Scan</button>
-            <span id="scanStatus" class="subtle" style="margin-left:auto;"></span>
+        <div class="mission-scan-controls">
+            <div class="mission-scan-actions">
+                <button onclick="startScan('passive')">Start Passive</button>
+                <button onclick="startScan('active')">Start Active</button>
+                <button class="secondary" onclick="stopScan()">Stop Scan</button>
+            </div>
+            <div id="scanStatus" class="scan-indicator" data-state="idle">
+                <span class="scan-dot"></span>
+                <div>
+                    <div class="scan-headline">Scanner idle</div>
+                    <div class="scan-subtitle">Select a mode to begin scanning.</div>
+                </div>
+            </div>
         </div>
         <div class="coordinate-toggle" style="margin-top:1rem;">
             <span class="subtle">Coordinate display:</span>
@@ -209,12 +289,20 @@ private let webConsoleHTML: String = #"""
         <div class="map-header">
             <h2>Mission Map</h2>
             <div class="map-controls">
-                <button id="autoFitButton" class="secondary" onclick="toggleAutoFit()">Auto-Fit On</button>
-                <button class="secondary" onclick="recenterMap()">Recenter</button>
+                <div class="map-button-group">
+                    <button class="secondary map-tool" onclick="zoomOut()" title="Zoom out">−</button>
+                    <button class="secondary map-tool" onclick="zoomIn()" title="Zoom in">+</button>
+                    <button id="toggle3DButton" class="secondary map-tool" onclick="toggle3D()" title="Toggle 3D">3D</button>
+                    <button id="recenterButton" class="secondary map-tool" onclick="recenterMap()" title="Recenter view">⌖</button>
+                </div>
                 <select id="mapStyleSelect" onchange="setMapStyle(this.value)">
                     <option value="dark">Dark</option>
                     <option value="streets">Streets</option>
-                    <option value="satellite">Satellite</option>
+                    <option value="outdoors">Outdoors</option>
+                    <option value="light">Light</option>
+                    <option value="navigationNight">Night Nav</option>
+                    <option value="satellite">Hybrid Satellite</option>
+                    <option value="aerial">Aerial</option>
                 </select>
                 <button class="secondary" onclick="toggleMapSize()">Toggle Fullscreen</button>
                 <select id="mapFilterSelect" onchange="setMapFilter(this.value)"></select>
@@ -273,8 +361,13 @@ private let webConsoleHTML: String = #"""
         const styleCatalog = {
             dark: 'mapbox://styles/mapbox/dark-v11',
             streets: 'mapbox://styles/mapbox/streets-v12',
-            satellite: 'mapbox://styles/mapbox/satellite-streets-v12'
+            outdoors: 'mapbox://styles/mapbox/outdoors-v12',
+            light: 'mapbox://styles/mapbox/light-v11',
+            navigationNight: 'mapbox://styles/mapbox/navigation-night-v1',
+            satellite: 'mapbox://styles/mapbox/satellite-streets-v12',
+            aerial: 'mapbox://styles/mapbox/satellite-v9'
         };
+        const terrainSourceId = 'mapbox-dem';
         let currentStyleKey = 'dark';
         const map = new mapboxgl.Map({
             container: 'mission-map',
@@ -282,7 +375,6 @@ private let webConsoleHTML: String = #"""
             center: [0, 0],
             zoom: 2
         });
-        map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }));
         const popup = new mapboxgl.Popup({ closeButton: true, closeOnMove: true });
 
         const deviceSourceId = 'device-positions';
@@ -294,11 +386,12 @@ private let webConsoleHTML: String = #"""
 
         let mapReady = false;
         let mapExpanded = false;
-        let mapAutoFit = true;
+        let mapFollow = true;
+        let mapIs3D = false;
         let latestDevices = [];
         let latestTargetId = null;
         let latestTeamLocation = null;
-        let lastBoundsKey = null;
+        let lastFocusKey = null;
 
         map.on('load', () => {
             mapReady = true;
@@ -308,11 +401,14 @@ private let webConsoleHTML: String = #"""
         map.on('styledata', () => {
             if (!mapReady) { return; }
             ensureSources();
+            applyTerrainIfNeeded();
             updateMap(latestTeamLocation, latestDevices, latestTargetId);
         });
-        map.on('dragstart', () => { mapAutoFit = false; updateMapControlsUI(); });
-        map.on('zoomstart', () => { mapAutoFit = false; updateMapControlsUI(); });
-        map.on('rotatestart', () => { mapAutoFit = false; updateMapControlsUI(); });
+        const detachFollow = () => { mapFollow = false; updateMapControlsUI(); };
+        map.on('dragstart', detachFollow);
+        map.on('zoomstart', detachFollow);
+        map.on('rotatestart', detachFollow);
+        map.on('pitchstart', detachFollow);
 
         async function fetchState() {
             try {
@@ -336,8 +432,20 @@ private let webConsoleHTML: String = #"""
         }
 
         function updateScanStatus(state) {
-            const status = state.isScanning ? `Scanning (${state.scanMode})` : 'Idle';
-            document.getElementById('scanStatus').textContent = status;
+            const container = document.getElementById('scanStatus');
+            if (!container) { return; }
+            const isScanning = !!state.isScanning;
+            const mode = (state.scanMode || 'passive').toLowerCase();
+            const modeLabel = mode === 'active' ? 'Active Scan' : 'Passive Scan';
+            const headline = isScanning ? `${modeLabel} running` : 'Scanner idle';
+            const subtitle = isScanning
+                ? (mode === 'active' ? 'Actively querying nearby emitters.' : 'Listening for advertisements and telemetry.')
+                : 'Select a mode to begin scanning.';
+            container.dataset.state = isScanning ? mode : 'idle';
+            const headlineEl = container.querySelector('.scan-headline');
+            const subtitleEl = container.querySelector('.scan-subtitle');
+            if (headlineEl) { headlineEl.textContent = headline; }
+            if (subtitleEl) { subtitleEl.textContent = subtitle; }
         }
 
         function updateCoordinateButtons(mode) {
@@ -385,8 +493,8 @@ private let webConsoleHTML: String = #"""
 
             tbody.innerHTML = sorted.map(device => {
                 const isTarget = device.id === latestTargetId;
-                const services = device.services?.map(s => s.id).join(', ') || '—';
-                const advertised = device.advertisedServiceUUIDs?.join(', ') || '—';
+                const services = formatServiceList(device);
+                const advertised = formatAdvertisedList(device);
                 const rangeValue = toNumber(device.estimatedRange);
                 const range = Number.isFinite(rangeValue) ? `${rangeValue.toFixed(1)} m` : '—';
                 const latestFix = getLatestFix(device);
@@ -413,7 +521,7 @@ private let webConsoleHTML: String = #"""
                             <div style="display:flex;flex-direction:column;gap:0.25rem;">
                                 <strong>${swatch}${device.name}</strong>
                                 <span class="subtle">Manufacturer: ${device.manufacturerData || '—'}</span>
-                                <span class="subtle">Advertised UUIDs: ${advertised}</span>
+                                <span class="subtle">Advertised: ${advertised}</span>
                                 <span class="subtle">Services: ${services}</span>
                             </div>
                         </td>
@@ -490,12 +598,8 @@ private let webConsoleHTML: String = #"""
                 teamSource.setData(mapData.teamCollection);
             }
 
-            if (mapAutoFit && mapData.bounds) {
-                const boundsKey = mapData.bounds.toArray().flat().map(v => v.toFixed(4)).join(',');
-                if (boundsKey !== lastBoundsKey) {
-                    map.fitBounds(mapData.bounds, { padding: 60, maxZoom: 17, duration: 400 });
-                    lastBoundsKey = boundsKey;
-                }
+            if (mapFollow) {
+                focusMap(mapData);
             }
         }
 
@@ -534,7 +638,8 @@ private let webConsoleHTML: String = #"""
                 mapFilterState.type = 'all';
                 mapFilterState.deviceId = null;
             }
-            mapAutoFit = true;
+            mapFollow = true;
+            lastFocusKey = null;
             updateMap(latestTeamLocation, latestDevices, latestTargetId);
             updateMapControlsUI();
         }
@@ -571,6 +676,31 @@ private let webConsoleHTML: String = #"""
             setTimeout(() => map.resize(), 250);
         }
 
+        function zoomIn() {
+            mapFollow = false;
+            updateMapControlsUI();
+            map.zoomIn({ duration: 250 });
+        }
+
+        function zoomOut() {
+            mapFollow = false;
+            updateMapControlsUI();
+            map.zoomOut({ duration: 250 });
+        }
+
+        function toggle3D() {
+            mapIs3D = !mapIs3D;
+            if (mapIs3D) {
+                applyTerrainIfNeeded();
+                map.easeTo({ pitch: 55, duration: 600 });
+            } else {
+                map.setTerrain(null);
+                if (map.getLayer('sky')) { map.removeLayer('sky'); }
+                map.easeTo({ pitch: 0, bearing: 0, duration: 500 });
+            }
+            updateMapControlsUI();
+        }
+
         function setSort(column) {
             if (sortState.column === column) {
                 sortState.ascending = !sortState.ascending;
@@ -589,16 +719,9 @@ private let webConsoleHTML: String = #"""
             }
         }
 
-        function toggleAutoFit() {
-            mapAutoFit = !mapAutoFit;
-            if (mapAutoFit) {
-                updateMap(latestTeamLocation, latestDevices, latestTargetId);
-            }
-            updateMapControlsUI();
-        }
-
         function recenterMap() {
-            mapAutoFit = true;
+            mapFollow = true;
+            lastFocusKey = null;
             updateMap(latestTeamLocation, latestDevices, latestTargetId);
             updateMapControlsUI();
         }
@@ -606,20 +729,26 @@ private let webConsoleHTML: String = #"""
         function setMapStyle(styleKey) {
             const style = styleCatalog[styleKey] || styleCatalog.dark;
             currentStyleKey = styleKey;
+            lastFocusKey = null;
             map.setStyle(style);
             const select = document.getElementById('mapStyleSelect');
             if (select) { select.value = styleKey; }
         }
 
         function updateMapControlsUI() {
-            const autoButton = document.getElementById('autoFitButton');
-            if (autoButton) {
-                autoButton.textContent = mapAutoFit ? 'Auto-Fit On' : 'Auto-Fit Off';
-                autoButton.classList.toggle('active', mapAutoFit);
-            }
             const freezeButton = document.getElementById('freezeTableButton');
             if (freezeButton) {
                 freezeButton.textContent = tableState.frozen ? 'Unfreeze Table' : 'Freeze Table';
+            }
+            const recenterButton = document.getElementById('recenterButton');
+            if (recenterButton) {
+                recenterButton.classList.toggle('active', mapFollow);
+            }
+            const button3D = document.getElementById('toggle3DButton');
+            if (button3D) {
+                button3D.classList.toggle('active', mapIs3D);
+                button3D.textContent = mapIs3D ? '2D' : '3D';
+                button3D.title = mapIs3D ? 'Switch to 2D' : 'Toggle 3D';
             }
         }
         function ensureSources() {
@@ -725,6 +854,30 @@ private let webConsoleHTML: String = #"""
             }
         }
 
+        function applyTerrainIfNeeded() {
+            if (!mapIs3D || !mapReady) { return; }
+            if (!map.getSource(terrainSourceId)) {
+                map.addSource(terrainSourceId, {
+                    type: 'raster-dem',
+                    url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
+                    tileSize: 512,
+                    maxzoom: 14
+                });
+            }
+            map.setTerrain({ source: terrainSourceId, exaggeration: 1.2 });
+            if (!map.getLayer('sky')) {
+                map.addLayer({
+                    id: 'sky',
+                    type: 'sky',
+                    paint: {
+                        'sky-type': 'atmosphere',
+                        'sky-atmosphere-sun': [0.0, 0.0],
+                        'sky-atmosphere-sun-intensity': 15
+                    }
+                });
+            }
+        }
+
         function emptyCollection() {
             return { type: 'FeatureCollection', features: [] };
         }
@@ -827,6 +980,29 @@ private let webConsoleHTML: String = #"""
             };
         }
 
+        function focusMap(mapData) {
+            if (!mapData) { return; }
+            if (mapData.bounds) {
+                const focusKey = `bounds:${mapData.bounds.toArray().flat().map(v => v.toFixed(4)).join(',')}:${mapIs3D ? '3d' : '2d'}`;
+                if (focusKey !== lastFocusKey) {
+                    map.fitBounds(mapData.bounds, { padding: mapIs3D ? 120 : 64, maxZoom: mapIs3D ? 18 : 17, duration: 450 });
+                    lastFocusKey = focusKey;
+                }
+                return;
+            }
+            if (latestTeamLocation) {
+                const lat = toNumber(latestTeamLocation.latitude);
+                const lon = toNumber(latestTeamLocation.longitude);
+                if (Number.isFinite(lat) && Number.isFinite(lon)) {
+                    const focusKey = `center:${lat.toFixed(4)},${lon.toFixed(4)}`;
+                    if (focusKey !== lastFocusKey) {
+                        map.easeTo({ center: [lon, lat], duration: 450 });
+                        lastFocusKey = focusKey;
+                    }
+                }
+            }
+        }
+
         function extractCoordinate(entry) {
             const lat = toNumber(entry.latitude ?? entry.coordinate?.latitude);
             const lon = toNumber(entry.longitude ?? entry.coordinate?.longitude);
@@ -855,6 +1031,26 @@ private let webConsoleHTML: String = #"""
                 return { value: Number.POSITIVE_INFINITY, text: '—' };
             }
             return { value, text: `${value.toFixed(1)} m` };
+        }
+
+        function formatServiceList(device) {
+            if (Array.isArray(device.serviceSummaries) && device.serviceSummaries.length) {
+                return device.serviceSummaries.join(', ');
+            }
+            if (Array.isArray(device.services) && device.services.length) {
+                return device.services.map(entry => entry.displayName || entry.id || entry).join(', ');
+            }
+            return '—';
+        }
+
+        function formatAdvertisedList(device) {
+            if (Array.isArray(device.advertisedServiceSummaries) && device.advertisedServiceSummaries.length) {
+                return device.advertisedServiceSummaries.join(', ');
+            }
+            if (Array.isArray(device.advertisedServiceUUIDs) && device.advertisedServiceUUIDs.length) {
+                return device.advertisedServiceUUIDs.join(', ');
+            }
+            return '—';
         }
 
         function accuracyToPixels(accuracyMeters, latitude, zoom) {

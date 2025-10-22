@@ -132,6 +132,13 @@ struct MissionDashboardView: View {
                     status: bluetoothStatusText,
                     tint: bluetoothStatusColor
                 )
+
+                systemStatusRow(
+                    title: "Scan Status",
+                    systemImage: scanStatusSymbol,
+                    status: scanStatusHeadline,
+                    tint: scanStatusColor
+                )
             }
 
             VStack(spacing: 12) {
@@ -220,6 +227,42 @@ struct MissionDashboardView: View {
             return .yellow
         @unknown default:
             return .gray
+        }
+    }
+
+    private var scanStatusHeadline: String {
+        controller.isScanning ? "\(controller.scanMode.displayName) running" : "Scanner idle"
+    }
+
+    private var scanStatusSubtitle: String {
+        if controller.isScanning {
+            switch controller.scanMode {
+            case .active:
+                return "Actively querying nearby emitters."
+            case .passive:
+                return "Listening for advertisements and telemetry."
+            }
+        }
+        return "Select a mode to begin scanning."
+    }
+
+    private var scanStatusColor: Color {
+        guard controller.isScanning else { return .gray }
+        switch controller.scanMode {
+        case .active:
+            return .blue
+        case .passive:
+            return .teal
+        }
+    }
+
+    private var scanStatusSymbol: String {
+        guard controller.isScanning else { return "pause.circle.fill" }
+        switch controller.scanMode {
+        case .active:
+            return "bolt.horizontal.circle.fill"
+        case .passive:
+            return "ear.circle.fill"
         }
     }
 
@@ -343,6 +386,7 @@ struct MissionDashboardView: View {
             Text(controller.scanMode.description)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+            scanStatusBadge
             HStack {
                 ForEach(ScanMode.allCases) { mode in
                     Button {
@@ -372,6 +416,30 @@ struct MissionDashboardView: View {
         .padding()
         .background(.ultraThickMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private var scanStatusBadge: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(scanStatusColor.opacity(0.18))
+                    .frame(width: 44, height: 44)
+                Image(systemName: scanStatusSymbol)
+                    .font(.title2)
+                    .foregroundStyle(scanStatusColor)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(scanStatusHeadline)
+                    .font(.headline)
+                Text(scanStatusSubtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .padding(12)
+        .background(scanStatusColor.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var missionWebURLDescription: String? {
@@ -995,11 +1063,11 @@ private struct MissionDeviceInfoSheet: View {
                     if let manufacturer = device.manufacturerData {
                         infoRow(label: "Manufacturer", value: manufacturer)
                     }
-                    if !device.advertisedServiceUUIDs.isEmpty {
-                        infoRow(label: "Advertised UUIDs", value: device.advertisedServiceUUIDs.map { $0.uuidString }.joined(separator: ", "))
+                    if !device.advertisedServiceSummaries.isEmpty {
+                        infoRow(label: "Advertised", value: device.advertisedServiceSummaries.joined(separator: ", "))
                     }
-                    if !device.services.isEmpty {
-                        infoRow(label: "Services", value: device.services.map { $0.id.uuidString }.joined(separator: ", "))
+                    if !device.serviceSummaries.isEmpty {
+                        infoRow(label: "Services", value: device.serviceSummaries.joined(separator: ", "))
                     }
 
                     Divider()

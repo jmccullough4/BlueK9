@@ -76,15 +76,34 @@ struct MissionDeviceRow: View {
                         .lineLimit(1)
                 }
 
-                if !device.advertisedServiceUUIDs.isEmpty {
-                    Text("Advertised UUIDs: \(device.advertisedServiceUUIDs.map { $0.uuidString }.joined(separator: ", "))")
+                if !device.advertisedServiceSummaries.isEmpty {
+                    Text("Advertised: \(device.advertisedServiceSummaries.joined(separator: ", "))")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
 
-                if !device.services.isEmpty {
-                    Text("Services: \(device.services.map { $0.id.uuidString }.joined(separator: ", "))")
+                if !device.serviceSummaries.isEmpty {
+                    Text("Services: \(device.serviceSummaries.joined(separator: ", "))")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                if let range = device.estimatedRange {
+                    Text(String(format: "Estimated range: %.1f m", range))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let cep = cepText {
+                    Text(cep)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let coordinateText = coordinateText {
+                    Text(coordinateText)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)

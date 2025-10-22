@@ -170,6 +170,14 @@ struct BluetoothDevice: Identifiable, Hashable {
     var displayCoordinate: String?
     var mapColorHex: String
 
+    var serviceSummaries: [String] {
+        services.map { $0.displayDescription }
+    }
+
+    var advertisedServiceSummaries: [String] {
+        advertisedServiceUUIDs.displayDescriptions()
+    }
+
     init(id: UUID,
          name: String?,
          rssi: Int,
@@ -209,7 +217,7 @@ struct BluetoothDevice: Identifiable, Hashable {
 
 extension BluetoothDevice: Codable {
     enum CodingKeys: String, CodingKey {
-        case id, name, lastRSSI, lastSeen, state, services, manufacturerData, hardwareAddress, advertisedServiceUUIDs, estimatedRange, locations, displayCoordinate, signalDescription, mapColorHex
+        case id, name, lastRSSI, lastSeen, state, services, manufacturerData, hardwareAddress, advertisedServiceUUIDs, estimatedRange, locations, displayCoordinate, signalDescription, mapColorHex, serviceSummaries, advertisedServiceSummaries
     }
 
     init(from decoder: Decoder) throws {
@@ -248,6 +256,12 @@ extension BluetoothDevice: Codable {
         try container.encodeIfPresent(displayCoordinate, forKey: .displayCoordinate)
         try container.encode(signalDescription, forKey: .signalDescription)
         try container.encode(mapColorHex, forKey: .mapColorHex)
+        if !serviceSummaries.isEmpty {
+            try container.encode(serviceSummaries, forKey: .serviceSummaries)
+        }
+        if !advertisedServiceSummaries.isEmpty {
+            try container.encode(advertisedServiceSummaries, forKey: .advertisedServiceSummaries)
+        }
     }
 }
 
@@ -265,6 +279,7 @@ extension BluetoothServiceInfo: Codable {
     enum CodingKeys: String, CodingKey {
         case id
         case characteristics
+        case displayName
     }
 
     init(from decoder: Decoder) throws {
@@ -279,6 +294,7 @@ extension BluetoothServiceInfo: Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id.uuidString, forKey: .id)
         try container.encode(characteristics.map { $0.uuidString }, forKey: .characteristics)
+        try container.encode(displayDescription, forKey: .displayName)
     }
 }
 

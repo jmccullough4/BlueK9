@@ -124,6 +124,10 @@ final class BluetoothService: NSObject {
         }
         if !device.advertisedServiceUUIDs.isEmpty {
             entries["advertisedServices"] = device.advertisedServiceUUIDs.map { $0.uuidString }.joined(separator: ",")
+            entries["advertisedServicesReadable"] = device.advertisedServiceSummaries.joined(separator: ",")
+        }
+        if !device.serviceSummaries.isEmpty {
+            entries["services"] = device.serviceSummaries.joined(separator: ",")
         }
         if let manufacturer = device.manufacturerData {
             entries["manufacturer"] = manufacturer
@@ -154,7 +158,7 @@ final class BluetoothService: NSObject {
             device.advertisedServiceUUIDs = serviceUUIDs
         }
         let txPower = (advertisementData[CBAdvertisementDataTxPowerLevelKey] as? NSNumber)?.intValue
-        device.estimatedRange = estimateRange(forRSSI: rssi.intValue, txPower: txPower)
+        device.estimatedRange = smoothedRange(previous: device.estimatedRange, measurement: estimateRange(forRSSI: rssi.intValue, txPower: txPower))
         return device
     }
 
@@ -170,6 +174,13 @@ final class BluetoothService: NSObject {
         // Using log-distance path loss model with environmental factor n = 2 (free space)
         let ratio = Double(measuredPower - rssi) / (10.0 * 2.0)
         return pow(10.0, ratio)
+    }
+
+    private func smoothedRange(previous: Double?, measurement: Double?) -> Double? {
+        guard let measurement else { return previous }
+        let clamped = max(0.2, min(measurement, 120.0))
+        guard let previous else { return clamped }
+        return previous * 0.65 + clamped * 0.35
     }
 }
 
@@ -273,7 +284,7 @@ extension BluetoothService: CBPeripheralDelegate {
         var device = devices[peripheral.identifier] ?? BluetoothDevice(id: peripheral.identifier, name: peripheral.name, rssi: RSSI.intValue)
         device.lastRSSI = RSSI.intValue
         device.lastSeen = Date()
-        device.estimatedRange = estimateRange(forRSSI: RSSI.intValue, txPower: nil)
+        device.estimatedRange = smoothedRange(previous: device.estimatedRange, measurement: estimateRange(forRSSI: RSSI.intValue, txPower: nil))
         devices[peripheral.identifier] = device
         pendingActiveGeoTargets.remove(peripheral.identifier)
         delegate?.bluetoothService(self, didUpdate: device)

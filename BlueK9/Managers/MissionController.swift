@@ -27,7 +27,6 @@ final class MissionController: ObservableObject {
     private let logHistoryLimit = 1000
     private let webLogLimit = 200
     private let webLocationHistoryLimit = 60
-    private let minimumCoordinateDelta = 0.00002
     private let staleDeviceInterval: TimeInterval = 15 * 60
     private let pruneCheckInterval: TimeInterval = 60
     private var lastPruneCheck = Date.distantPast
@@ -378,16 +377,6 @@ final class MissionController: ObservableObject {
         var updatedDevice = mergeResult.device
         var appendedNewLocation = mergeResult.appendedLocation
 
-        if let coordinate = location {
-            var history = updatedDevice.locations
-            let latest = history.last
-            if shouldRecord(coordinate: coordinate, comparedTo: latest) {
-                history.append(DeviceGeo(coordinate: coordinate, accuracy: locationAccuracy))
-                updatedDevice.locations = history
-                appendedNewLocation = true
-            }
-        }
-
         trimHistory(for: &updatedDevice)
 
         if let index = devices.firstIndex(where: { $0.id == updatedDevice.id }) {
@@ -453,13 +442,6 @@ final class MissionController: ObservableObject {
             }
         }
         return appended
-    }
-
-    private func shouldRecord(coordinate: CLLocationCoordinate2D, comparedTo previous: DeviceGeo?) -> Bool {
-        guard let previous else { return true }
-        let deltaLat = abs(previous.coordinate.latitude - coordinate.latitude)
-        let deltaLon = abs(previous.coordinate.longitude - coordinate.longitude)
-        return deltaLat > minimumCoordinateDelta || deltaLon > minimumCoordinateDelta
     }
 
     private func trimHistory(for device: inout BluetoothDevice) {
@@ -548,6 +530,7 @@ extension MissionController: LocationServiceDelegate {
 extension MissionController: BluetoothServiceDelegate {
     nonisolated func bluetoothService(_ service: BluetoothService, didChangeScanning isScanning: Bool, mode: ScanMode) {
         Task { @MainActor in
+            self.scanMode = mode
             self.isScanning = isScanning
         }
     }
