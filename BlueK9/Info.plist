@@ -41,10 +41,6 @@
 <array>
 <string>location</string>
 </array>
-<key>UIBackgroundModes</key>
-<array>
-<string>location</string>
-</array>
 <key>NSLocationWhenInUseUsageDescription</key>
 <string>Location access is required to show the mission location on the map.</string>
 <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

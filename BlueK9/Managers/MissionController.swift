@@ -213,7 +213,7 @@ final class MissionController: ObservableObject {
     }
 
     @MainActor
-    private func makeMissionStateSnapshot() -> MissionState {
+    private func makeWebMissionState() -> MissionState {
         let trimmedDevices = devices.map { device -> BluetoothDevice in
             var copy = device
             if copy.locations.count > webLocationHistoryLimit {
@@ -238,74 +238,26 @@ final class MissionController: ObservableObject {
         )
     }
 
-    private func emptyMissionState() -> MissionState {
-        MissionState(
-            scanMode: .passive,
-            isScanning: false,
-            location: nil,
-            locationAccuracy: nil,
-            devices: [],
-            logEntries: [],
-            coordinatePreference: .latitudeLongitude,
-            targetDeviceID: nil,
-            logs: [],
-            activeLogID: nil
-        )
-    }
-
-    @MainActor
-    private func makeMissionStateSnapshot() -> MissionState {
-        let trimmedDevices = devices.map { device -> BluetoothDevice in
-            var copy = device
-            if copy.locations.count > webLocationHistoryLimit {
-                copy.locations = Array(copy.locations.suffix(webLocationHistoryLimit))
-            }
-            return copy
-        }
-
-        let limitedLog = Array(logEntries.suffix(webLogLimit))
-
-        return MissionState(
-            scanMode: scanMode,
-            isScanning: isScanning,
-            location: location,
-            locationAccuracy: locationAccuracy,
-            devices: trimmedDevices,
-            logEntries: limitedLog,
-            coordinatePreference: coordinateDisplayMode,
-            targetDeviceID: targetDeviceID
-        )
-    }
-
-    private func emptyMissionState() -> MissionState {
-        MissionState(
-            scanMode: .passive,
-            isScanning: false,
-            location: nil,
-            locationAccuracy: nil,
-            devices: [],
-            logEntries: [],
-            coordinatePreference: .latitudeLongitude,
-            targetDeviceID: nil
-        )
+    private func makeEmptyMissionState() -> MissionState {
+        MissionState.empty
     }
 
     private func startWebServer() {
         let server = WebControlServer(
             stateProvider: { [weak self] in
                 guard let self else {
-                    return MissionState(scanMode: .passive, isScanning: false, location: nil, locationAccuracy: nil, devices: [], logEntries: [], coordinatePreference: .latitudeLongitude, targetDeviceID: nil, logs: [], activeLogID: nil)
+                    return MissionState.empty
                 }
 
                 if Thread.isMainThread {
-                    return self.makeMissionStateSnapshot()
+                    return self.makeWebMissionState()
                 }
 
                 var snapshot: MissionState?
                 DispatchQueue.main.sync {
-                    snapshot = self.makeMissionStateSnapshot()
+                    snapshot = self.makeWebMissionState()
                 }
-                return snapshot ?? self.emptyMissionState()
+                return snapshot ?? self.makeEmptyMissionState()
             },
             commandHandler: { [weak self] command in
                 Task { @MainActor in

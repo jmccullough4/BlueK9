@@ -294,6 +294,17 @@ struct MissionState: Codable {
     var logs: [MissionLogDescriptor]
     var activeLogID: UUID?
 
+    static let empty = MissionState(
+        scanMode: .passive,
+        isScanning: false,
+        location: nil,
+        locationAccuracy: nil,
+        devices: [],
+        logEntries: [],
+        coordinatePreference: .latitudeLongitude,
+        targetDeviceID: nil
+    )
+
     init(scanMode: ScanMode,
          isScanning: Bool,
          location: CLLocationCoordinate2D?,
@@ -302,8 +313,8 @@ struct MissionState: Codable {
          logEntries: [MissionLogEntry],
          coordinatePreference: CoordinateDisplayMode,
          targetDeviceID: UUID?,
-         logs: [MissionLogDescriptor],
-         activeLogID: UUID?) {
+         logs: [MissionLogDescriptor] = [],
+         activeLogID: UUID? = nil) {
         self.scanMode = scanMode
         self.isScanning = isScanning
         self.location = location
