@@ -6,10 +6,14 @@ struct MissionDeviceRow: View {
     let device: BluetoothDevice
     let coordinateMode: CoordinateDisplayMode
     let isTarget: Bool
+    let hasCustomName: Bool
     let onMarkTarget: () -> Void
     let onClearTarget: () -> Void
     let onActiveGeo: () -> Void
     let onGetInfo: () -> Void
+    let onRename: () -> Void
+    let onClearName: () -> Void
+    let onShowDetails: () -> Void
 
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -24,6 +28,14 @@ struct MissionDeviceRow: View {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(device.name)
                         .font(.headline)
+                    if hasCustomName {
+                        Label("Custom", systemImage: "pencil.circle")
+                            .font(.caption2.bold())
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.orange.opacity(0.25))
+                            .clipShape(Capsule())
+                    }
                     if isTarget {
                         Label("Target", systemImage: "scope")
                             .font(.caption2.bold())
@@ -32,6 +44,15 @@ struct MissionDeviceRow: View {
                             .background(Color.red.opacity(0.25))
                             .clipShape(Capsule())
                     }
+                }
+
+                if device.name == "Unknown" && !hasCustomName {
+                    Button(action: onRename) {
+                        Label("Name this device", systemImage: "person.crop.circle.badge.plus")
+                            .labelStyle(.titleAndIcon)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.orange)
                 }
 
                 Text("Last seen \(dateFormatter.string(from: device.lastSeen))")
@@ -100,7 +121,9 @@ struct MissionDeviceRow: View {
                     .stroke(Color.red, lineWidth: 2)
             }
         }
+        .contentShape(Rectangle())
         .contextMenu {
+            Button("View Details", action: onShowDetails)
             if isTarget {
                 Button("Clear Target", role: .destructive, action: onClearTarget)
             } else {
@@ -108,6 +131,10 @@ struct MissionDeviceRow: View {
             }
             Button("Active Geo", action: onActiveGeo)
             Button("Get Info", action: onGetInfo)
+            Button("Rename…", action: onRename)
+            if hasCustomName {
+                Button("Clear Custom Name", role: .destructive, action: onClearName)
+            }
         }
         .onLongPressGesture {
             if isTarget {
@@ -116,6 +143,7 @@ struct MissionDeviceRow: View {
                 onMarkTarget()
             }
         }
+        .onTapGesture(perform: onShowDetails)
     }
 
     private var signalIndicator: some View {
@@ -198,10 +226,14 @@ struct MissionDeviceRow: View {
         ),
         coordinateMode: .latitudeLongitude,
         isTarget: true,
+        hasCustomName: true,
         onMarkTarget: {},
         onClearTarget: {},
         onActiveGeo: {},
-        onGetInfo: {}
+        onGetInfo: {},
+        onRename: {},
+        onClearName: {},
+        onShowDetails: {}
     )
-    .padding()
+        .padding()
 }

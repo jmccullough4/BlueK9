@@ -6,6 +6,8 @@ import CoreBluetooth
 final class MissionController: ObservableObject {
     @Published var devices: [BluetoothDevice] = []
     @Published var logEntries: [MissionLogEntry]
+    @Published var logs: [MissionLogDescriptor]
+    @Published var activeLog: MissionLogDescriptor
     @Published var isScanning: Bool = false
     @Published var scanMode: ScanMode = .passive
     @Published var location: CLLocationCoordinate2D?
@@ -20,6 +22,7 @@ final class MissionController: ObservableObject {
     private let logManager: LogManager
     private var webServer: WebControlServer?
     private let coordinatePreferenceKey = "MissionCoordinateDisplayMode"
+    private let customNamesKey = "MissionCustomDeviceNames"
     private let locationHistoryLimit = 120
     private let logHistoryLimit = 1000
     private let webLogLimit = 200
@@ -28,11 +31,15 @@ final class MissionController: ObservableObject {
     private let staleDeviceInterval: TimeInterval = 15 * 60
     private let pruneCheckInterval: TimeInterval = 60
     private var lastPruneCheck = Date.distantPast
+    private var customDeviceNames: [UUID: String]
     init(preview: Bool = false) {
         self.locationService = LocationService()
         self.bluetoothService = BluetoothService()
         self.logManager = LogManager()
-        self.logEntries = logManager.load()
+        let logSnapshot = logManager.bootstrap()
+        self.logEntries = logSnapshot.entries
+        self.logs = logSnapshot.logs
+        self.activeLog = logSnapshot.activeLog
         self.locationAuthorizationStatus = locationService.currentAuthorizationStatus
         self.bluetoothState = bluetoothService.state
         if let stored = UserDefaults.standard.string(forKey: coordinatePreferenceKey), let mode = CoordinateDisplayMode(rawValue: stored) {
@@ -41,6 +48,15 @@ final class MissionController: ObservableObject {
             self.coordinateDisplayMode = .latitudeLongitude
         }
         self.targetDeviceID = nil
+        if let storedNames = UserDefaults.standard.dictionary(forKey: customNamesKey) as? [String: String] {
+            self.customDeviceNames = storedNames.reduce(into: [:]) { partialResult, element in
+                if let uuid = UUID(uuidString: element.key) {
+                    partialResult[uuid] = element.value
+                }
+            }
+        } else {
+            self.customDeviceNames = [:]
+        }
 
         locationService.delegate = self
         bluetoothService.delegate = self
@@ -120,7 +136,121 @@ final class MissionController: ObservableObject {
     }
 
     func logFileURL() -> URL {
-        logManager.logURL()
+        logManager.exportCSV()
+    }
+
+    func selectLog(_ descriptor: MissionLogDescriptor) {
+        selectLog(id: descriptor.id)
+    }
+
+    func selectLog(id: UUID) {
+        let snapshot = logManager.selectLog(id: id)
+        replaceLogState(with: snapshot)
+        appendLog(MissionLogEntry(type: .note, message: "Switched to log", metadata: ["name": snapshot.activeLog.name]))
+    }
+
+    func createLog(named name: String) {
+        let snapshot = logManager.createLog(named: name)
+        replaceLogState(with: snapshot)
+        appendLog(MissionLogEntry(type: .note, message: "Log created", metadata: ["name": snapshot.activeLog.name]))
+    }
+
+    func renameActiveLog(to name: String) {
+        renameLog(id: activeLog.id, to: name, shouldLog: true)
+    }
+
+    func renameLog(id: UUID, to name: String) {
+        renameLog(id: id, to: name, shouldLog: activeLog.id == id)
+    }
+
+    func deleteLog(_ descriptor: MissionLogDescriptor) {
+        deleteLog(id: descriptor.id, name: descriptor.name)
+    }
+
+    func deleteLog(id: UUID, name: String? = nil) {
+        let snapshot = logManager.deleteLog(id: id)
+        replaceLogState(with: snapshot)
+        if let name = name, !name.isEmpty {
+            appendLog(MissionLogEntry(type: .note, message: "Log deleted", metadata: ["name": name]))
+        } else {
+            appendLog(MissionLogEntry(type: .note, message: "Log deleted"))
+        }
+    }
+
+    func deleteAllLogs() {
+        let snapshot = logManager.deleteAllLogs()
+        replaceLogState(with: snapshot)
+        appendLog(MissionLogEntry(type: .note, message: "Logs reset"))
+    }
+
+    func clearDevices() {
+        devices.removeAll()
+        targetDeviceID = nil
+        appendLog(MissionLogEntry(type: .note, message: "Device list cleared"))
+    }
+
+    func renameDevice(_ device: BluetoothDevice, to name: String) {
+        setCustomName(name, for: device.id)
+    }
+
+    func clearDeviceName(_ device: BluetoothDevice) {
+        setCustomName(nil, for: device.id)
+    }
+
+    func renameDevice(id: UUID, to name: String) {
+        setCustomName(name, for: id)
+    }
+
+    func clearDeviceName(id: UUID) {
+        setCustomName(nil, for: id)
+    }
+
+    func hasCustomName(for id: UUID) -> Bool {
+        if let value = customDeviceNames[id] {
+            return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        return false
+    }
+
+    @MainActor
+    private func makeMissionStateSnapshot() -> MissionState {
+        let trimmedDevices = devices.map { device -> BluetoothDevice in
+            var copy = device
+            if copy.locations.count > webLocationHistoryLimit {
+                copy.locations = Array(copy.locations.suffix(webLocationHistoryLimit))
+            }
+            return copy
+        }
+
+        let limitedLog = Array(logEntries.suffix(webLogLimit))
+
+        return MissionState(
+            scanMode: scanMode,
+            isScanning: isScanning,
+            location: location,
+            locationAccuracy: locationAccuracy,
+            devices: trimmedDevices,
+            logEntries: limitedLog,
+            coordinatePreference: coordinateDisplayMode,
+            targetDeviceID: targetDeviceID,
+            logs: logs,
+            activeLogID: activeLog.id
+        )
+    }
+
+    private func emptyMissionState() -> MissionState {
+        MissionState(
+            scanMode: .passive,
+            isScanning: false,
+            location: nil,
+            locationAccuracy: nil,
+            devices: [],
+            logEntries: [],
+            coordinatePreference: .latitudeLongitude,
+            targetDeviceID: nil,
+            logs: [],
+            activeLogID: nil
+        )
     }
 
     @MainActor
@@ -164,7 +294,7 @@ final class MissionController: ObservableObject {
         let server = WebControlServer(
             stateProvider: { [weak self] in
                 guard let self else {
-                    return MissionState(scanMode: .passive, isScanning: false, location: nil, locationAccuracy: nil, devices: [], logEntries: [], coordinatePreference: .latitudeLongitude, targetDeviceID: nil)
+                    return MissionState(scanMode: .passive, isScanning: false, location: nil, locationAccuracy: nil, devices: [], logEntries: [], coordinatePreference: .latitudeLongitude, targetDeviceID: nil, logs: [], activeLogID: nil)
                 }
 
                 if Thread.isMainThread {
@@ -194,6 +324,24 @@ final class MissionController: ObservableObject {
                         self?.performActiveGeo(on: id)
                     case .getInfo(let id):
                         self?.requestDeviceInfo(for: id)
+                    case .createLog(let name):
+                        self?.createLog(named: name)
+                    case .selectLog(let id):
+                        self?.selectLog(id: id)
+                    case .renameLog(let id, let name):
+                        self?.renameLog(id: id, to: name)
+                    case .deleteLog(let id, let name):
+                        self?.deleteLog(id: id, name: name)
+                    case .deleteAllLogs:
+                        self?.deleteAllLogs()
+                    case .clearDevices:
+                        self?.clearDevices()
+                    case .setCustomName(let id, let name):
+                        if let name {
+                            self?.renameDevice(id: id, to: name)
+                        } else {
+                            self?.clearDeviceName(id: id)
+                        }
                     case .setCoordinatePreference(let mode):
                         self?.setCoordinateDisplayMode(mode)
                     }
@@ -212,7 +360,64 @@ final class MissionController: ObservableObject {
         if logEntries.count > logHistoryLimit {
             logEntries.removeFirst(logEntries.count - logHistoryLimit)
         }
-        logManager.persist(entries: logEntries)
+        let snapshot = logManager.persist(entries: logEntries)
+        updateLogMetadata(from: snapshot)
+    }
+
+    private func replaceLogState(with snapshot: LogSnapshot) {
+        logEntries = snapshot.entries
+        updateLogMetadata(from: snapshot)
+    }
+
+    private func updateLogMetadata(from snapshot: LogSnapshot) {
+        logs = snapshot.logs
+        activeLog = snapshot.activeLog
+    }
+
+    private func renameLog(id: UUID, to name: String, shouldLog: Bool) {
+        let snapshot = logManager.renameLog(id: id, to: name)
+        replaceLogState(with: snapshot)
+        if shouldLog, snapshot.activeLog.id == id {
+            appendLog(MissionLogEntry(type: .note, message: "Log renamed", metadata: ["name": snapshot.activeLog.name]))
+        }
+    }
+
+    private func setCustomName(_ rawName: String?, for id: UUID) {
+        let trimmed = rawName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if trimmed.isEmpty {
+            guard customDeviceNames.removeValue(forKey: id) != nil else { return }
+            persistCustomNames()
+            updateDevicesForCustomNames()
+            appendLog(MissionLogEntry(type: .note, message: "Cleared device alias", metadata: ["uuid": id.uuidString]))
+            return
+        }
+
+        guard customDeviceNames[id] != trimmed else { return }
+        customDeviceNames[id] = trimmed
+        persistCustomNames()
+        updateDevicesForCustomNames()
+        appendLog(MissionLogEntry(type: .note, message: "Named device", metadata: ["uuid": id.uuidString, "name": trimmed]))
+    }
+
+    private func persistCustomNames() {
+        let stored = customDeviceNames.reduce(into: [String: String]()) { partialResult, element in
+            partialResult[element.key.uuidString] = element.value
+        }
+        UserDefaults.standard.set(stored, forKey: customNamesKey)
+    }
+
+    private func updateDevicesForCustomNames() {
+        devices = devices.map { device in
+            var updated = device
+            applyCustomName(&updated)
+            return updated
+        }
+    }
+
+    private func applyCustomName(_ device: inout BluetoothDevice) {
+        if let custom = customDeviceNames[device.id], !custom.isEmpty {
+            device.name = custom
+        }
     }
 
     private func updateDevice(_ device: BluetoothDevice) {
@@ -273,6 +478,7 @@ final class MissionController: ObservableObject {
         existing.estimatedRange = incoming.estimatedRange
         existing.mapColorHex = incoming.mapColorHex
         let appended = append(locations: incoming.locations, to: &existing.locations)
+        applyCustomName(&existing)
         return (existing, appended)
     }
 
@@ -280,6 +486,7 @@ final class MissionController: ObservableObject {
         var cleaned = device
         cleaned.locations = []
         let appended = append(locations: device.locations, to: &cleaned.locations)
+        applyCustomName(&cleaned)
         return (cleaned, appended)
     }
 

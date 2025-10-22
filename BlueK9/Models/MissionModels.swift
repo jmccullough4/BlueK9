@@ -109,6 +109,20 @@ struct MissionLogEntry: Identifiable, Codable {
     }
 }
 
+struct MissionLogDescriptor: Identifiable, Codable, Equatable {
+    var id: UUID
+    var name: String
+    var createdAt: Date
+    var updatedAt: Date
+
+    init(id: UUID = UUID(), name: String, createdAt: Date = Date(), updatedAt: Date = Date()) {
+        self.id = id
+        self.name = name
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
 enum ScanMode: String, Codable, CaseIterable, Identifiable {
     case passive
     case active
@@ -277,6 +291,8 @@ struct MissionState: Codable {
     var logEntries: [MissionLogEntry]
     var coordinatePreference: CoordinateDisplayMode
     var targetDeviceID: UUID?
+    var logs: [MissionLogDescriptor]
+    var activeLogID: UUID?
 
     init(scanMode: ScanMode,
          isScanning: Bool,
@@ -285,7 +301,9 @@ struct MissionState: Codable {
          devices: [BluetoothDevice],
          logEntries: [MissionLogEntry],
          coordinatePreference: CoordinateDisplayMode,
-         targetDeviceID: UUID?) {
+         targetDeviceID: UUID?,
+         logs: [MissionLogDescriptor],
+         activeLogID: UUID?) {
         self.scanMode = scanMode
         self.isScanning = isScanning
         self.location = location
@@ -294,6 +312,8 @@ struct MissionState: Codable {
         self.logEntries = logEntries
         self.coordinatePreference = coordinatePreference
         self.targetDeviceID = targetDeviceID
+        self.logs = logs
+        self.activeLogID = activeLogID
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -305,6 +325,8 @@ struct MissionState: Codable {
         case logEntries
         case coordinatePreference
         case targetDeviceID
+        case logs
+        case activeLogID
     }
 
     private enum LocationCodingKeys: String, CodingKey {
@@ -320,6 +342,8 @@ struct MissionState: Codable {
         logEntries = try container.decode([MissionLogEntry].self, forKey: .logEntries)
         coordinatePreference = try container.decode(CoordinateDisplayMode.self, forKey: .coordinatePreference)
         targetDeviceID = try container.decodeIfPresent(UUID.self, forKey: .targetDeviceID)
+        logs = try container.decodeIfPresent([MissionLogDescriptor].self, forKey: .logs) ?? []
+        activeLogID = try container.decodeIfPresent(UUID.self, forKey: .activeLogID)
         locationAccuracy = try container.decodeIfPresent(CLLocationAccuracy.self, forKey: .locationAccuracy)
 
         if container.contains(.location) {
@@ -344,6 +368,8 @@ struct MissionState: Codable {
         try container.encode(logEntries, forKey: .logEntries)
         try container.encode(coordinatePreference, forKey: .coordinatePreference)
         try container.encodeIfPresent(targetDeviceID, forKey: .targetDeviceID)
+        try container.encode(logs, forKey: .logs)
+        try container.encodeIfPresent(activeLogID, forKey: .activeLogID)
         try container.encodeIfPresent(locationAccuracy, forKey: .locationAccuracy)
 
         if let location {

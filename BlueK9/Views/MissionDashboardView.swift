@@ -12,7 +12,14 @@ struct MissionDashboardView: View {
     @State private var mapScope: MissionMapScope = .all
     @State private var isMapExpanded = false
     @State private var selectedDeviceForDetails: BluetoothDevice?
+    @State private var deviceIDRequestingRename: UUID?
     @State private var sortOrder: DeviceSortOrder = .signal
+    @State private var isFollowingMissionRegion = true
+    @State private var isDeviceListFrozen = false
+    @State private var frozenDevicesSnapshot: [BluetoothDevice] = []
+    @State private var logNameDraft: String = ""
+    @State private var showDeleteLogConfirmation = false
+    @State private var showDeleteAllLogsConfirmation = false
 
     var body: some View {
         ScrollView {
@@ -27,33 +34,82 @@ struct MissionDashboardView: View {
         }
         .background(Color(.systemBackground))
         .onReceive(controller.$location.compactMap { $0 }) { coordinate in
+            guard isFollowingMissionRegion else { return }
             withAnimation {
                 region.center = coordinate
             }
         }
-        .onChange(of: controller.devices, initial: false) { _, _ in
-            updateRegionToFitAnnotations()
+        .onChange(of: controller.devices, initial: true) { _, newDevices in
+            if isDeviceListFrozen {
+                var updatedSnapshot = frozenDevicesSnapshot
+                for index in updatedSnapshot.indices {
+                    if let replacement = newDevices.first(where: { $0.id == updatedSnapshot[index].id }) {
+                        updatedSnapshot[index] = replacement
+                    }
+                }
+                frozenDevicesSnapshot = updatedSnapshot
+            } else {
+                frozenDevicesSnapshot = newDevices
+                updateRegionToFitAnnotations()
+            }
         }
         .onChange(of: mapScope, initial: false) { _, _ in
-            updateRegionToFitAnnotations()
+            isFollowingMissionRegion = true
+            updateRegionToFitAnnotations(force: true)
         }
         .onAppear {
-            updateRegionToFitAnnotations()
+            frozenDevicesSnapshot = controller.devices
+            logNameDraft = controller.activeLog.name
+            updateRegionToFitAnnotations(force: true)
+        }
+        .onChange(of: controller.activeLog, initial: false) { _, active in
+            logNameDraft = active.name
         }
         .fullScreenCover(isPresented: $isMapExpanded) {
-            MissionMapDetailView(region: $region, scope: $mapScope, selectedDevice: $selectedDeviceForDetails)
+            MissionMapDetailView(
+                region: $region,
+                scope: $mapScope,
+                selectedDevice: $selectedDeviceForDetails,
+                isFollowing: $isFollowingMissionRegion,
+                onUserInteraction: {
+                    isFollowingMissionRegion = false
+                },
+                onRecenter: recenterMap,
+                onDeviceSelected: { _ in deviceIDRequestingRename = nil }
+            )
                 .environmentObject(controller)
         }
-        .sheet(item: $selectedDeviceForDetails) { device in
+        .sheet(item: $selectedDeviceForDetails, onDismiss: { deviceIDRequestingRename = nil }) { device in
             MissionDeviceInfoSheet(
                 device: device,
                 coordinateMode: controller.coordinateDisplayMode,
                 isTarget: controller.targetDeviceID == device.id,
+                hasCustomName: controller.hasCustomName(for: device.id),
+                shouldFocusNameField: deviceIDRequestingRename == device.id,
                 onMarkTarget: { controller.setTarget(device) },
                 onClearTarget: { controller.clearTarget() },
                 onActiveGeo: { controller.performActiveGeo(on: device.id) },
-                onGetInfo: { controller.requestDeviceInfo(for: device.id) }
+                onGetInfo: { controller.requestDeviceInfo(for: device.id) },
+                onRename: { newName in
+                    controller.renameDevice(device, to: newName)
+                    deviceIDRequestingRename = nil
+                    if let updated = controller.devices.first(where: { $0.id == device.id }) {
+                        selectedDeviceForDetails = updated
+                    }
+                },
+                onClearName: {
+                    controller.clearDeviceName(device)
+                    deviceIDRequestingRename = nil
+                    if let updated = controller.devices.first(where: { $0.id == device.id }) {
+                        selectedDeviceForDetails = updated
+                    } else {
+                        selectedDeviceForDetails = nil
+                    }
+                }
             )
+            .onDisappear {
+                deviceIDRequestingRename = nil
+            }
         }
     }
 
@@ -257,6 +313,18 @@ struct MissionDashboardView: View {
                     }
                     .padding(10)
                 }
+                .overlay(alignment: .bottomLeading) {
+                    if !isFollowingMissionRegion {
+                        Button(action: recenterMap) {
+                            Label("Recenter", systemImage: "location.fill.viewfinder")
+                                .labelStyle(.iconOnly)
+                                .padding(10)
+                                .background(.ultraThinMaterial)
+                                .clipShape(Circle())
+                        }
+                        .padding(10)
+                    }
+                }
                 .overlay {
                     RoundedRectangle(cornerRadius: 16).strokeBorder(Color.blue.opacity(0.25), lineWidth: 1)
                 }
@@ -327,7 +395,11 @@ struct MissionDashboardView: View {
         MissionCompactMapView(
             region: $region,
             annotations: mapAnnotations,
-            onSelectDevice: { selectedDeviceForDetails = $0 }
+            onSelectDevice: {
+                deviceIDRequestingRename = nil
+                selectedDeviceForDetails = $0
+            },
+            onUserInteraction: { isFollowingMissionRegion = false }
         )
     }
 
@@ -339,16 +411,20 @@ struct MissionDashboardView: View {
         mapData.coordinates
     }
 
+    private var displayedDevices: [BluetoothDevice] {
+        isDeviceListFrozen ? frozenDevicesSnapshot : controller.devices
+    }
+
     private var sortedDevices: [BluetoothDevice] {
         switch sortOrder {
         case .signal:
-            return controller.devices.sorted { $0.lastRSSI > $1.lastRSSI }
+            return displayedDevices.sorted { $0.lastRSSI > $1.lastRSSI }
         case .recent:
-            return controller.devices.sorted { $0.lastSeen > $1.lastSeen }
+            return displayedDevices.sorted { $0.lastSeen > $1.lastSeen }
         case .name:
-            return controller.devices.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            return displayedDevices.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         case .range:
-            return controller.devices.sorted {
+            return displayedDevices.sorted {
                 let lhs = $0.estimatedRange ?? .greatestFiniteMagnitude
                 let rhs = $1.estimatedRange ?? .greatestFiniteMagnitude
                 if lhs == rhs {
@@ -356,10 +432,23 @@ struct MissionDashboardView: View {
                 }
                 return lhs < rhs
             }
+        case .target:
+            return displayedDevices.sorted { lhs, rhs in
+                let lhsIsTarget = lhs.id == controller.targetDeviceID
+                let rhsIsTarget = rhs.id == controller.targetDeviceID
+                if lhsIsTarget != rhsIsTarget {
+                    return lhsIsTarget && !rhsIsTarget
+                }
+                if lhs.lastSeen == rhs.lastSeen {
+                    return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+                }
+                return lhs.lastSeen > rhs.lastSeen
+            }
         }
     }
 
-    private func updateRegionToFitAnnotations() {
+    private func updateRegionToFitAnnotations(force: Bool = false) {
+        guard force || isFollowingMissionRegion else { return }
         let coordinates = mapCoordinates
         guard !coordinates.isEmpty else { return }
         let minLat = coordinates.map { $0.latitude }.min() ?? region.center.latitude
@@ -371,10 +460,40 @@ struct MissionDashboardView: View {
         region = MKCoordinateRegion(center: center, span: span)
     }
 
+    private func recenterMap() {
+        isFollowingMissionRegion = true
+        updateRegionToFitAnnotations(force: true)
+    }
+
     private var deviceSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Devices", systemImage: "dot.radiowaves.left.and.right")
-                .font(.title2.bold())
+            HStack {
+                Label("Devices", systemImage: "dot.radiowaves.left.and.right")
+                    .font(.title2.bold())
+                Spacer()
+                Button {
+                    isDeviceListFrozen.toggle()
+                    if isDeviceListFrozen {
+                        frozenDevicesSnapshot = controller.devices
+                    } else {
+                        updateRegionToFitAnnotations(force: true)
+                    }
+                } label: {
+                    Label(isDeviceListFrozen ? "Unfreeze" : "Freeze", systemImage: isDeviceListFrozen ? "play.circle" : "pause.circle")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(MissionSecondaryButtonStyle())
+
+                Button {
+                    controller.clearDevices()
+                    isDeviceListFrozen = false
+                    frozenDevicesSnapshot.removeAll()
+                } label: {
+                    Label("Clear", systemImage: "trash")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(MissionSecondaryButtonStyle())
+            }
             Picker("Sort", selection: $sortOrder) {
                 ForEach(DeviceSortOrder.allCases) { option in
                     Text(option.displayName).tag(option)
@@ -383,9 +502,33 @@ struct MissionDashboardView: View {
             .pickerStyle(.segmented)
 
             ForEach(sortedDevices) { device in
-                MissionDeviceRow(device: device, coordinateMode: controller.coordinateDisplayMode, isTarget: controller.targetDeviceID == device.id, onMarkTarget: { controller.setTarget(device) }, onClearTarget: { controller.clearTarget() }, onActiveGeo: { controller.performActiveGeo(on: device.id) }, onGetInfo: { controller.requestDeviceInfo(for: device.id) })
+                MissionDeviceRow(
+                    device: device,
+                    coordinateMode: controller.coordinateDisplayMode,
+                    isTarget: controller.targetDeviceID == device.id,
+                    hasCustomName: controller.hasCustomName(for: device.id),
+                    onMarkTarget: { controller.setTarget(device) },
+                    onClearTarget: { controller.clearTarget() },
+                    onActiveGeo: { controller.performActiveGeo(on: device.id) },
+                    onGetInfo: { controller.requestDeviceInfo(for: device.id) },
+                    onRename: {
+                        deviceIDRequestingRename = device.id
+                        selectedDeviceForDetails = controller.devices.first(where: { $0.id == device.id }) ?? device
+                    },
+                    onClearName: {
+                        controller.clearDeviceName(device)
+                        deviceIDRequestingRename = nil
+                        if let updated = controller.devices.first(where: { $0.id == device.id }) {
+                            selectedDeviceForDetails = updated
+                        }
+                    },
+                    onShowDetails: {
+                        deviceIDRequestingRename = nil
+                        selectedDeviceForDetails = controller.devices.first(where: { $0.id == device.id }) ?? device
+                    }
+                )
             }
-            if controller.devices.isEmpty {
+            if displayedDevices.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "waveform")
                         .font(.title)
@@ -411,6 +554,51 @@ struct MissionDashboardView: View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Mission Log", systemImage: "doc.text")
                 .font(.title2.bold())
+            VStack(alignment: .leading, spacing: 10) {
+                Picker("Active Log", selection: Binding(get: { controller.activeLog.id }, set: { controller.selectLog(id: $0) })) {
+                    ForEach(controller.logs) { descriptor in
+                        Text(descriptor.name).tag(descriptor.id)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    TextField("Log name", text: $logNameDraft)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { controller.renameActiveLog(to: logNameDraft) }
+
+                    HStack(spacing: 10) {
+                        Button {
+                            controller.renameActiveLog(to: logNameDraft)
+                        } label: {
+                            Label("Rename", systemImage: "pencil")
+                        }
+                        .buttonStyle(MissionSecondaryButtonStyle())
+
+                        Button {
+                            controller.createLog(named: logNameDraft.isEmpty ? "Untitled Log" : logNameDraft)
+                        } label: {
+                            Label("New Log", systemImage: "plus")
+                        }
+                        .buttonStyle(MissionSecondaryButtonStyle())
+
+                        Button(role: .destructive) {
+                            showDeleteLogConfirmation = true
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                        .buttonStyle(MissionSecondaryButtonStyle())
+                        .disabled(controller.logs.count <= 1)
+
+                        Button(role: .destructive) {
+                            showDeleteAllLogsConfirmation = true
+                        } label: {
+                            Label("Delete All", systemImage: "trash.slash")
+                        }
+                        .buttonStyle(MissionSecondaryButtonStyle())
+                    }
+                }
+            }
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     ForEach(controller.logEntries.reversed()) { entry in
@@ -422,6 +610,18 @@ struct MissionDashboardView: View {
             .frame(minHeight: 180, maxHeight: 260)
 
             MissionLogShareButton(logURL: controller.logFileURL())
+        }
+        .confirmationDialog("Delete current log?", isPresented: $showDeleteLogConfirmation, titleVisibility: .visible) {
+            Button("Delete Log", role: .destructive) {
+                controller.deleteLog(controller.activeLog)
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog("Delete all logs?", isPresented: $showDeleteAllLogsConfirmation, titleVisibility: .visible) {
+            Button("Delete All Logs", role: .destructive) {
+                controller.deleteAllLogs()
+            }
+            Button("Cancel", role: .cancel) {}
         }
         .padding()
         .background(.ultraThickMaterial)
@@ -584,6 +784,7 @@ private enum DeviceSortOrder: String, CaseIterable, Identifiable {
     case recent
     case name
     case range
+    case target
 
     var id: String { rawValue }
 
@@ -597,6 +798,8 @@ private enum DeviceSortOrder: String, CaseIterable, Identifiable {
             return "Name"
         case .range:
             return "Range"
+        case .target:
+            return "Target"
         }
     }
 }
@@ -607,6 +810,10 @@ private struct MissionMapDetailView: View {
     @Binding var region: MKCoordinateRegion
     @Binding var scope: MissionMapScope
     @Binding var selectedDevice: BluetoothDevice?
+    @Binding var isFollowing: Bool
+    let onUserInteraction: () -> Void
+    let onRecenter: () -> Void
+    let onDeviceSelected: (BluetoothDevice) -> Void
 
     private var mapData: MissionMapData {
         MissionMapData(
@@ -624,15 +831,31 @@ private struct MissionMapDetailView: View {
         MissionDetailMapView(
             region: $region,
             annotations: mapData.annotations,
-            selectedDevice: $selectedDevice
+            selectedDevice: $selectedDevice,
+            onUserInteraction: onUserInteraction,
+            onSelectDevice: onDeviceSelected
         )
     }
 
     var body: some View {
         NavigationStack {
             mapViewContent
-                .mapStyle(.standard)
                 .ignoresSafeArea()
+                .overlay(alignment: .bottomTrailing) {
+                    if !isFollowing {
+                        Button(action: onRecenter) {
+                            Label("Recenter", systemImage: "location.fill.viewfinder")
+                                .labelStyle(.iconOnly)
+                                .padding(12)
+                                .background(.ultraThinMaterial)
+                                .clipShape(Circle())
+                                .shadow(radius: 4)
+                        }
+                        .padding(.trailing, 20)
+                        .padding(.bottom, 40)
+                    }
+                }
+                .background(Color(.systemBackground))
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Close") { dismiss() }
@@ -664,10 +887,42 @@ private struct MissionDeviceInfoSheet: View {
     let device: BluetoothDevice
     let coordinateMode: CoordinateDisplayMode
     let isTarget: Bool
+    let hasCustomName: Bool
+    let shouldFocusNameField: Bool
     let onMarkTarget: () -> Void
     let onClearTarget: () -> Void
     let onActiveGeo: () -> Void
     let onGetInfo: () -> Void
+    let onRename: (String) -> Void
+    let onClearName: () -> Void
+
+    @State private var nameDraft: String
+    @FocusState private var nameFieldFocused: Bool
+
+    init(device: BluetoothDevice,
+         coordinateMode: CoordinateDisplayMode,
+         isTarget: Bool,
+         hasCustomName: Bool,
+         shouldFocusNameField: Bool,
+         onMarkTarget: @escaping () -> Void,
+         onClearTarget: @escaping () -> Void,
+         onActiveGeo: @escaping () -> Void,
+         onGetInfo: @escaping () -> Void,
+         onRename: @escaping (String) -> Void,
+         onClearName: @escaping () -> Void) {
+        self.device = device
+        self.coordinateMode = coordinateMode
+        self.isTarget = isTarget
+        self.hasCustomName = hasCustomName
+        self.shouldFocusNameField = shouldFocusNameField
+        self.onMarkTarget = onMarkTarget
+        self.onClearTarget = onClearTarget
+        self.onActiveGeo = onActiveGeo
+        self.onGetInfo = onGetInfo
+        self.onRename = onRename
+        self.onClearName = onClearName
+        _nameDraft = State(initialValue: device.name)
+    }
 
     private var coordinateText: String? {
         if let display = device.displayCoordinate {
@@ -677,10 +932,57 @@ private struct MissionDeviceInfoSheet: View {
         return CoordinateFormatter.shared.string(from: location, mode: coordinateMode)
     }
 
+    private var trimmedName: String {
+        nameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var canSaveName: Bool {
+        !trimmedName.isEmpty && trimmedName != device.name
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Device Alias")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        TextField("Enter custom name", text: $nameDraft)
+                            .textFieldStyle(.roundedBorder)
+                            .focused($nameFieldFocused)
+                            .textInputAutocapitalization(.words)
+                            .disableAutocorrection(true)
+                        HStack(spacing: 12) {
+                            Button {
+                                nameFieldFocused = false
+                                onRename(trimmedName)
+                            } label: {
+                                Label("Save", systemImage: "checkmark.circle")
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(!canSaveName)
+
+                            Button(role: .destructive) {
+                                nameFieldFocused = false
+                                onClearName()
+                            } label: {
+                                Label("Clear", systemImage: "trash")
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(!hasCustomName)
+                        }
+                        if hasCustomName {
+                            Text("Custom alias synced across devices.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("Add an alias to recognize this emitter at a glance.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
                     infoRow(label: "Bluetooth Address", value: device.hardwareAddress)
                     infoRow(label: "UUID", value: device.id.uuidString)
                     infoRow(label: "Last RSSI", value: "\(device.lastRSSI) dBm")
@@ -736,6 +1038,23 @@ private struct MissionDeviceInfoSheet: View {
                 }
             }
         }
+        .onAppear {
+            if shouldFocusNameField {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    nameFieldFocused = true
+                }
+            }
+        }
+        .onChange(of: device) { _, updated in
+            nameDraft = updated.name
+        }
+        .onChange(of: shouldFocusNameField) { _, newValue in
+            if newValue {
+                DispatchQueue.main.async {
+                    nameFieldFocused = true
+                }
+            }
+        }
     }
 
     private func infoRow(label: String, value: String) -> some View {
@@ -776,14 +1095,16 @@ private struct MissionCompactMapView: View {
     @Binding var region: MKCoordinateRegion
     let annotations: [MissionMapAnnotation]
     let onSelectDevice: (BluetoothDevice) -> Void
+    let onUserInteraction: () -> Void
 
     @State private var cameraPosition: MapCameraPosition
     @State private var lastCameraRegion: MKCoordinateRegion
 
-    init(region: Binding<MKCoordinateRegion>, annotations: [MissionMapAnnotation], onSelectDevice: @escaping (BluetoothDevice) -> Void) {
+    init(region: Binding<MKCoordinateRegion>, annotations: [MissionMapAnnotation], onSelectDevice: @escaping (BluetoothDevice) -> Void, onUserInteraction: @escaping () -> Void) {
         _region = region
         self.annotations = annotations
         self.onSelectDevice = onSelectDevice
+        self.onUserInteraction = onUserInteraction
         _cameraPosition = State(initialValue: .region(region.wrappedValue))
         _lastCameraRegion = State(initialValue: region.wrappedValue)
     }
@@ -796,8 +1117,12 @@ private struct MissionCompactMapView: View {
                 }
             }
         }
+        .mapStyle(.standard)
         .onMapCameraChange { context in
             let newRegion = context.region
+            if context.reason == .userInteraction {
+                onUserInteraction()
+            }
             if !regionsAreApproximatelyEqual(newRegion, lastCameraRegion) {
                 lastCameraRegion = newRegion
                 region = newRegion
@@ -811,6 +1136,8 @@ private struct MissionCompactMapView: View {
             lastCameraRegion = region
             cameraPosition = .region(region)
         }
+        .simultaneousGesture(DragGesture(minimumDistance: 1).onChanged { _ in onUserInteraction() })
+        .simultaneousGesture(MagnificationGesture().onChanged { _ in onUserInteraction() })
     }
 
     @ViewBuilder
@@ -876,14 +1203,18 @@ private struct MissionDetailMapView: View {
     @Binding var region: MKCoordinateRegion
     let annotations: [MissionMapAnnotation]
     @Binding var selectedDevice: BluetoothDevice?
+    let onUserInteraction: () -> Void
+    let onSelectDevice: (BluetoothDevice) -> Void
 
     @State private var cameraPosition: MapCameraPosition
     @State private var lastCameraRegion: MKCoordinateRegion
 
-    init(region: Binding<MKCoordinateRegion>, annotations: [MissionMapAnnotation], selectedDevice: Binding<BluetoothDevice?>) {
+    init(region: Binding<MKCoordinateRegion>, annotations: [MissionMapAnnotation], selectedDevice: Binding<BluetoothDevice?>, onUserInteraction: @escaping () -> Void, onSelectDevice: @escaping (BluetoothDevice) -> Void) {
         _region = region
         self.annotations = annotations
         _selectedDevice = selectedDevice
+        self.onUserInteraction = onUserInteraction
+        self.onSelectDevice = onSelectDevice
         _cameraPosition = State(initialValue: .region(region.wrappedValue))
         _lastCameraRegion = State(initialValue: region.wrappedValue)
     }
@@ -896,8 +1227,12 @@ private struct MissionDetailMapView: View {
                 }
             }
         }
+        .mapStyle(.standard)
         .onMapCameraChange { context in
             let newRegion = context.region
+            if context.reason == .userInteraction {
+                onUserInteraction()
+            }
             if !regionsAreApproximatelyEqual(newRegion, lastCameraRegion) {
                 lastCameraRegion = newRegion
                 region = newRegion
@@ -911,6 +1246,8 @@ private struct MissionDetailMapView: View {
             lastCameraRegion = region
             cameraPosition = .region(region)
         }
+        .simultaneousGesture(DragGesture(minimumDistance: 1).onChanged { _ in onUserInteraction() })
+        .simultaneousGesture(MagnificationGesture().onChanged { _ in onUserInteraction() })
     }
 
     @ViewBuilder
@@ -935,6 +1272,7 @@ private struct MissionDetailMapView: View {
         case .latest(let device, let coordinateText, let accuracy):
             Button {
                 selectedDevice = device
+                onSelectDevice(device)
             } label: {
                 VStack(spacing: 6) {
                     Circle()

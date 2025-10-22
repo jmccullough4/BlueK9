@@ -8,7 +8,7 @@ struct MissionLogShareButton: View {
     var body: some View {
         if #available(iOS 16.0, *) {
             ShareLink(item: logURL) {
-                Label("Export Log", systemImage: "square.and.arrow.up")
+                Label("Export CSV", systemImage: "square.and.arrow.up")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(MissionSecondaryButtonStyle())
@@ -16,7 +16,7 @@ struct MissionLogShareButton: View {
             Button {
                 isPresenting = true
             } label: {
-                Label("Export Log", systemImage: "square.and.arrow.up")
+                Label("Export CSV", systemImage: "square.and.arrow.up")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(MissionSecondaryButtonStyle())
@@ -38,6 +38,6 @@ private struct ActivityViewController: UIViewControllerRepresentable {
 }
 
 #Preview(traits: .sizeThatFitsLayout) {
-    MissionLogShareButton(logURL: URL(fileURLWithPath: "/tmp/mock.json"))
+    MissionLogShareButton(logURL: URL(fileURLWithPath: "/tmp/mock.csv"))
         .padding()
 }
