@@ -108,6 +108,25 @@ struct MissionDeviceRow: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
+
+                if let range = device.estimatedRange {
+                    Text(String(format: "Estimated range: %.1f m", range))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let cep = cepText {
+                    Text(cep)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let coordinateText = coordinateText {
+                    Text(coordinateText)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
             }
             Spacer()
             statusPill
