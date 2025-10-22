@@ -1119,7 +1119,7 @@ private struct MissionCompactMapView: View {
         }
         .mapStyle(.standard)
         .onChange(of: cameraPosition, initial: false) { _, newPosition in
-            guard case let MapCameraPosition.region(newRegion) = newPosition else { return }
+            guard case .region(let newRegion) = newPosition else { return }
             if !regionsAreApproximatelyEqual(newRegion, lastCameraRegion) {
                 lastCameraRegion = newRegion
                 region = newRegion
@@ -1227,7 +1227,7 @@ private struct MissionDetailMapView: View {
         }
         .mapStyle(.standard)
         .onChange(of: cameraPosition, initial: false) { _, newPosition in
-            guard case let MapCameraPosition.region(newRegion) = newPosition else { return }
+            guard case .region(let newRegion) = newPosition else { return }
             if !regionsAreApproximatelyEqual(newRegion, lastCameraRegion) {
                 lastCameraRegion = newRegion
                 region = newRegion
