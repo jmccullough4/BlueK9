@@ -6,6 +6,7 @@ protocol BluetoothServiceDelegate: AnyObject {
     func bluetoothService(_ service: BluetoothService, didDiscover device: BluetoothDevice)
     func bluetoothService(_ service: BluetoothService, didUpdate device: BluetoothDevice)
     func bluetoothService(_ service: BluetoothService, didLog entry: MissionLogEntry)
+    func bluetoothService(_ service: BluetoothService, didUpdateState state: CBManagerState)
 }
 
 final class BluetoothService: NSObject {
@@ -14,12 +15,18 @@ final class BluetoothService: NSObject {
     private var peripherals: [UUID: CBPeripheral] = [:]
     private var devices: [UUID: BluetoothDevice] = [:]
     private var pendingScanMode: ScanMode?
+    private var pendingActiveGeoTargets: Set<UUID> = []
+    private var pendingInfoRequests: Set<UUID> = []
     private(set) var isScanning: Bool = false
     weak var delegate: BluetoothServiceDelegate?
 
     override init() {
         super.init()
         central = CBCentralManager(delegate: self, queue: centralQueue)
+    }
+
+    var state: CBManagerState {
+        central.state
     }
 
     func startScanning(mode: ScanMode) {
@@ -42,6 +49,54 @@ final class BluetoothService: NSObject {
         }
     }
 
+    func performActiveGeo(on deviceID: UUID) {
+        centralQueue.async { [weak self] in
+            guard let self else { return }
+            self.pendingActiveGeoTargets.insert(deviceID)
+            self.delegate?.bluetoothService(self, didLog: MissionLogEntry(type: .note, message: "Active geo requested", metadata: ["target": deviceID.uuidString]))
+            self.ensureConnection(to: deviceID)
+        }
+    }
+
+    func requestDetailedInformation(for deviceID: UUID) {
+        centralQueue.async { [weak self] in
+            guard let self else { return }
+            self.pendingInfoRequests.insert(deviceID)
+            self.delegate?.bluetoothService(self, didLog: MissionLogEntry(type: .note, message: "Requesting device information", metadata: ["target": deviceID.uuidString]))
+            self.ensureConnection(to: deviceID)
+        }
+    }
+
+    private func ensureConnection(to deviceID: UUID) {
+        guard let peripheral = peripherals[deviceID] else {
+            delegate?.bluetoothService(self, didLog: MissionLogEntry(type: .error, message: "Peripheral unavailable", metadata: ["target": deviceID.uuidString]))
+            return
+        }
+
+        switch peripheral.state {
+        case .connected:
+            handlePostConnectActions(for: peripheral)
+        case .connecting:
+            break
+        default:
+            if var device = devices[deviceID] {
+                device.state = .connecting
+                devices[deviceID] = device
+                delegate?.bluetoothService(self, didUpdate: device)
+            }
+            central.connect(peripheral, options: nil)
+        }
+    }
+
+    private func handlePostConnectActions(for peripheral: CBPeripheral) {
+        if pendingActiveGeoTargets.contains(peripheral.identifier) {
+            peripheral.readRSSI()
+        }
+        if pendingInfoRequests.contains(peripheral.identifier) {
+            peripheral.discoverServices(nil)
+        }
+    }
+
     private func scan(with mode: ScanMode) {
         if isScanning {
             central.stopScan()
@@ -58,15 +113,74 @@ final class BluetoothService: NSObject {
         delegate?.bluetoothService(self, didUpdate: newDevice)
     }
 
+    private func metadata(for device: BluetoothDevice) -> [String: String] {
+        var entries: [String: String] = [
+            "uuid": device.id.uuidString,
+            "address": device.hardwareAddress,
+            "rssi": "\(device.lastRSSI)"
+        ]
+        if let range = device.estimatedRange {
+            entries["estimatedRangeMeters"] = String(format: "%.1f", range)
+        }
+        if !device.advertisedServiceUUIDs.isEmpty {
+            entries["advertisedServices"] = device.advertisedServiceUUIDs.map { $0.uuidString }.joined(separator: ",")
+            entries["advertisedServicesReadable"] = device.advertisedServiceSummaries.joined(separator: ",")
+        }
+        if !device.serviceSummaries.isEmpty {
+            entries["services"] = device.serviceSummaries.joined(separator: ",")
+        }
+        if let manufacturer = device.manufacturerData {
+            entries["manufacturer"] = manufacturer
+        }
+        if let location = device.lastKnownLocation?.coordinate {
+            entries["lat"] = String(format: "%.6f", location.latitude)
+            entries["lon"] = String(format: "%.6f", location.longitude)
+        }
+        return entries
+    }
+
     private func buildDevice(from peripheral: CBPeripheral, rssi: NSNumber, advertisementData: [String: Any]) -> BluetoothDevice {
-        let manufacturerData = (advertisementData[CBAdvertisementDataManufacturerDataKey] as? Data)?.map { String(format: "%02hhX", $0) }.joined()
+        let manufacturerBytes = advertisementData[CBAdvertisementDataManufacturerDataKey] as? Data
+        let manufacturerData = manufacturerBytes?.map { String(format: "%02hhX", $0) }.joined()
         let name = peripheral.name ?? (advertisementData[CBAdvertisementDataLocalNameKey] as? String)
-        var device = devices[peripheral.identifier] ?? BluetoothDevice(id: peripheral.identifier, name: name, rssi: rssi.intValue)
+        var device = devices[peripheral.identifier] ?? BluetoothDevice(id: peripheral.identifier, name: name, rssi: rssi.intValue, hardwareAddress: peripheral.identifier.uuidString)
         device.name = name ?? device.name
         device.lastRSSI = rssi.intValue
         device.lastSeen = Date()
         device.manufacturerData = manufacturerData
+        if let address = bluetoothAddress(from: manufacturerBytes) {
+            device.hardwareAddress = address
+        } else {
+            device.hardwareAddress = peripheral.identifier.uuidString
+        }
+        device.mapColorHex = DeviceColorPalette.hexString(for: device.id)
+        if let serviceUUIDs = advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID] {
+            device.advertisedServiceUUIDs = serviceUUIDs
+        }
+        let txPower = (advertisementData[CBAdvertisementDataTxPowerLevelKey] as? NSNumber)?.intValue
+        device.estimatedRange = smoothedRange(previous: device.estimatedRange, measurement: estimateRange(forRSSI: rssi.intValue, txPower: txPower))
         return device
+    }
+
+    private func bluetoothAddress(from manufacturerData: Data?) -> String? {
+        guard let data = manufacturerData, data.count >= 6 else { return nil }
+        let addressBytes = data.suffix(6)
+        return addressBytes.map { String(format: "%02X", $0) }.joined(separator: ":")
+    }
+
+    private func estimateRange(forRSSI rssi: Int, txPower: Int?) -> Double? {
+        let measuredPower = txPower ?? -59
+        guard rssi < 0 else { return nil }
+        // Using log-distance path loss model with environmental factor n = 2 (free space)
+        let ratio = Double(measuredPower - rssi) / (10.0 * 2.0)
+        return pow(10.0, ratio)
+    }
+
+    private func smoothedRange(previous: Double?, measurement: Double?) -> Double? {
+        guard let measurement else { return previous }
+        let clamped = max(0.2, min(measurement, 120.0))
+        guard let previous else { return clamped }
+        return previous * 0.65 + clamped * 0.35
     }
 }
 
@@ -84,6 +198,8 @@ extension BluetoothService: CBCentralManagerDelegate {
         default:
             break
         }
+
+        delegate?.bluetoothService(self, didUpdateState: central.state)
     }
 
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
@@ -92,15 +208,18 @@ extension BluetoothService: CBCentralManagerDelegate {
         peripheral.delegate = self
         devices[peripheral.identifier] = device
         delegate?.bluetoothService(self, didDiscover: device)
-        delegate?.bluetoothService(self, didLog: MissionLogEntry(type: .deviceDiscovered, message: "Discovered \(device.name)", metadata: ["rssi": "\(device.lastRSSI)"]))
+        delegate?.bluetoothService(self, didLog: MissionLogEntry(type: .deviceDiscovered, message: "Discovered \(device.name)", metadata: metadata(for: device)))
 
         guard let mode = pendingScanMode, mode == .active else {
             return
         }
 
         if peripheral.state == .disconnected {
-            devices[peripheral.identifier]?.state = .connecting
-            delegate?.bluetoothService(self, didUpdate: devices[peripheral.identifier]!)
+            if var connectingDevice = devices[peripheral.identifier] {
+                connectingDevice.state = .connecting
+                devices[peripheral.identifier] = connectingDevice
+                delegate?.bluetoothService(self, didUpdate: connectingDevice)
+            }
             central.connect(peripheral, options: nil)
         }
     }
@@ -110,8 +229,11 @@ extension BluetoothService: CBCentralManagerDelegate {
         device.state = .connected
         devices[peripheral.identifier] = device
         delegate?.bluetoothService(self, didUpdate: device)
-        delegate?.bluetoothService(self, didLog: MissionLogEntry(type: .deviceConnected, message: "Connected to \(device.name)"))
-        peripheral.discoverServices(nil)
+        delegate?.bluetoothService(self, didLog: MissionLogEntry(type: .deviceConnected, message: "Connected to \(device.name)", metadata: metadata(for: device)))
+        handlePostConnectActions(for: peripheral)
+        if pendingInfoRequests.contains(peripheral.identifier) || pendingScanMode == .active {
+            peripheral.discoverServices(nil)
+        }
     }
 
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
@@ -120,6 +242,8 @@ extension BluetoothService: CBCentralManagerDelegate {
         devices[peripheral.identifier] = device
         delegate?.bluetoothService(self, didUpdate: device)
         delegate?.bluetoothService(self, didLog: MissionLogEntry(type: .error, message: "Failed to connect to \(device.name)", metadata: ["error": error?.localizedDescription ?? "Unknown"]))
+        pendingActiveGeoTargets.remove(peripheral.identifier)
+        pendingInfoRequests.remove(peripheral.identifier)
     }
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
@@ -128,6 +252,8 @@ extension BluetoothService: CBCentralManagerDelegate {
         devices[peripheral.identifier] = device
         delegate?.bluetoothService(self, didUpdate: device)
         delegate?.bluetoothService(self, didLog: MissionLogEntry(type: .deviceDisconnected, message: "Disconnected from \(device.name)"))
+        pendingActiveGeoTargets.remove(peripheral.identifier)
+        pendingInfoRequests.remove(peripheral.identifier)
     }
 }
 
@@ -146,6 +272,23 @@ extension BluetoothService: CBPeripheralDelegate {
         delegate?.bluetoothService(self, didLog: MissionLogEntry(type: .deviceServices, message: "Discovered services for \(device.name)"))
 
         services.forEach { peripheral.discoverCharacteristics(nil, for: $0) }
+        pendingInfoRequests.remove(peripheral.identifier)
+    }
+
+    func peripheral(_ peripheral: CBPeripheral, didReadRSSI RSSI: NSNumber, error: Error?) {
+        if let error {
+            delegate?.bluetoothService(self, didLog: MissionLogEntry(type: .error, message: "RSSI read failed", metadata: ["error": error.localizedDescription]))
+            return
+        }
+
+        var device = devices[peripheral.identifier] ?? BluetoothDevice(id: peripheral.identifier, name: peripheral.name, rssi: RSSI.intValue)
+        device.lastRSSI = RSSI.intValue
+        device.lastSeen = Date()
+        device.estimatedRange = smoothedRange(previous: device.estimatedRange, measurement: estimateRange(forRSSI: RSSI.intValue, txPower: nil))
+        devices[peripheral.identifier] = device
+        pendingActiveGeoTargets.remove(peripheral.identifier)
+        delegate?.bluetoothService(self, didUpdate: device)
+        delegate?.bluetoothService(self, didLog: MissionLogEntry(type: .deviceUpdated, message: "Updated signal for \(device.name)", metadata: metadata(for: device)))
     }
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
