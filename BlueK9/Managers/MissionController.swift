@@ -30,6 +30,8 @@ final class MissionController: ObservableObject {
     private let staleDeviceInterval: TimeInterval = 15 * 60
     private let pruneCheckInterval: TimeInterval = 60
     private var lastPruneCheck = Date.distantPast
+    private let geoMinimumDistance: CLLocationDistance = 5.0
+    private let geoMinimumInterval: TimeInterval = 8
     private var customDeviceNames: [UUID: String]
     init(preview: Bool = false) {
         self.locationService = LocationService()
@@ -377,6 +379,10 @@ final class MissionController: ObservableObject {
         var updatedDevice = mergeResult.device
         var appendedNewLocation = mergeResult.appendedLocation
 
+        if appendCurrentLocationIfNeeded(to: &updatedDevice) {
+            appendedNewLocation = true
+        }
+
         trimHistory(for: &updatedDevice)
 
         if let index = devices.firstIndex(where: { $0.id == updatedDevice.id }) {
@@ -394,12 +400,70 @@ final class MissionController: ObservableObject {
                 let formatted = CoordinateFormatter.shared.string(from: latest.coordinate, mode: coordinateDisplayMode)
                 devices[idx].displayCoordinate = formatted
                 if appendedNewLocation || devices[idx].locations.count > previousLocationCount {
-                    appendLog(MissionLogEntry(type: .deviceUpdated, message: "Geo fix for \(devices[idx].name)", metadata: ["coordinate": formatted, "uuid": updatedDevice.id.uuidString]))
+                    var metadata: [String: String] = [
+                        "coordinate": formatted,
+                        "uuid": updatedDevice.id.uuidString
+                    ]
+                    if let accuracy = latest.accuracy ?? devices[idx].estimatedRange,
+                       accuracy.isFinite,
+                       accuracy > 0 {
+                        metadata["cep"] = String(format: "%.1f", accuracy)
+                    }
+                    appendLog(MissionLogEntry(type: .deviceUpdated, message: "Geo fix for \(devices[idx].name)", metadata: metadata))
                 }
             } else {
                 devices[idx].displayCoordinate = nil
             }
         }
+    }
+
+    private func appendCurrentLocationIfNeeded(to device: inout BluetoothDevice) -> Bool {
+        guard let currentCoordinate = location else { return false }
+        let accuracy = combinedAccuracy(for: device)
+        let newGeo = DeviceGeo(coordinate: currentCoordinate, accuracy: accuracy)
+        guard shouldAppend(newGeo, to: device.locations) else { return false }
+        device.locations.append(newGeo)
+        return true
+    }
+
+    private func shouldAppend(_ geo: DeviceGeo, to locations: [DeviceGeo]) -> Bool {
+        guard let last = locations.last else { return true }
+
+        let timeDelta = geo.timestamp.timeIntervalSince(last.timestamp)
+        if timeDelta >= geoMinimumInterval {
+            return true
+        }
+
+        let previous = CLLocation(latitude: last.coordinate.latitude, longitude: last.coordinate.longitude)
+        let current = CLLocation(latitude: geo.coordinate.latitude, longitude: geo.coordinate.longitude)
+        let distance = current.distance(from: previous)
+
+        if distance >= geoMinimumDistance {
+            return true
+        }
+
+        if let previousAccuracy = last.accuracy,
+           let newAccuracy = geo.accuracy,
+           abs(previousAccuracy - newAccuracy) >= 5 {
+            return true
+        }
+
+        return false
+    }
+
+    private func combinedAccuracy(for device: BluetoothDevice) -> CLLocationAccuracy? {
+        var components: [CLLocationAccuracy] = []
+        if let locationAccuracy,
+           locationAccuracy.isFinite,
+           locationAccuracy > 0 {
+            components.append(locationAccuracy)
+        }
+        if let estimated = device.estimatedRange,
+           estimated.isFinite,
+           estimated > 0 {
+            components.append(estimated)
+        }
+        return components.max()
     }
 
     private func merge(_ incoming: BluetoothDevice) -> (device: BluetoothDevice, appendedLocation: Bool) {
