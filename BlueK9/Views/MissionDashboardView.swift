@@ -1092,10 +1092,9 @@ private struct CameraPositionSignature: Equatable {
     private let kind: Kind
 
     init(_ position: MapCameraPosition) {
-        switch position {
-        case .region(let region):
+        if let region = cameraRegion(from: position) {
             kind = .region(RegionSignature(region))
-        default:
+        } else {
             kind = .other
         }
     }
@@ -1109,11 +1108,19 @@ private func regionsAreApproximatelyEqual(_ lhs: MKCoordinateRegion, _ rhs: MKCo
         abs(lhs.span.longitudeDelta - rhs.span.longitudeDelta) < threshold
 }
 
-private func region(from position: MapCameraPosition) -> MKCoordinateRegion? {
+private func cameraRegion(from position: MapCameraPosition) -> MKCoordinateRegion? {
+#if compiler(>=6.0)
+    return position.region
+#else
     if case .region(let region) = position {
         return region
     }
     return nil
+#endif
+}
+
+private func cameraPosition(from region: MKCoordinateRegion) -> MapCameraPosition {
+    MapCameraPosition.region(region)
 }
 
 private struct MissionCompactMapView: View {
@@ -1131,7 +1138,7 @@ private struct MissionCompactMapView: View {
         self.annotations = annotations
         self.onSelectDevice = onSelectDevice
         self.onUserInteraction = onUserInteraction
-        _cameraPosition = State(initialValue: .region(region.wrappedValue))
+        _cameraPosition = State(initialValue: cameraPosition(from: region.wrappedValue))
         _lastCameraRegion = State(initialValue: region.wrappedValue)
     }
 
@@ -1145,7 +1152,7 @@ private struct MissionCompactMapView: View {
         }
         .mapStyle(.standard)
         .onChange(of: CameraPositionSignature(cameraPosition), initial: false) { _, _ in
-            guard let newRegion = region(from: cameraPosition) else { return }
+            guard let newRegion = cameraRegion(from: cameraPosition) else { return }
 
             if isProgrammaticCameraChange {
                 isProgrammaticCameraChange = false
@@ -1167,7 +1174,7 @@ private struct MissionCompactMapView: View {
 
             lastCameraRegion = region
             isProgrammaticCameraChange = true
-            cameraPosition = .region(region)
+            cameraPosition = cameraPosition(from: region)
         }
     }
 
@@ -1247,7 +1254,7 @@ private struct MissionDetailMapView: View {
         _selectedDevice = selectedDevice
         self.onUserInteraction = onUserInteraction
         self.onSelectDevice = onSelectDevice
-        _cameraPosition = State(initialValue: .region(region.wrappedValue))
+        _cameraPosition = State(initialValue: cameraPosition(from: region.wrappedValue))
         _lastCameraRegion = State(initialValue: region.wrappedValue)
     }
 
@@ -1261,7 +1268,7 @@ private struct MissionDetailMapView: View {
         }
         .mapStyle(.standard)
         .onChange(of: CameraPositionSignature(cameraPosition), initial: false) { _, _ in
-            guard let newRegion = region(from: cameraPosition) else { return }
+            guard let newRegion = cameraRegion(from: cameraPosition) else { return }
 
             if isProgrammaticCameraChange {
                 isProgrammaticCameraChange = false
@@ -1283,7 +1290,7 @@ private struct MissionDetailMapView: View {
 
             lastCameraRegion = region
             isProgrammaticCameraChange = true
-            cameraPosition = .region(region)
+            cameraPosition = cameraPosition(from: region)
         }
     }
 
