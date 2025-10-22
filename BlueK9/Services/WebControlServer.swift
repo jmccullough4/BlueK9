@@ -165,6 +165,7 @@ private let webConsoleHTML: String = #"""
                     <th onclick="setSort('signal')">Signal</th>
                     <th onclick="setSort('recent')">Identifiers &amp; Last Seen</th>
                     <th onclick="setSort('range')">Range</th>
+                    <th onclick="setSort('cep')">CEP</th>
                     <th>Coordinate</th>
                     <th>Actions</th>
                 </tr>
@@ -219,13 +220,15 @@ private let webConsoleHTML: String = #"""
                     throw new Error('Request failed');
                 }
                 const state = await response.json();
-                latestTeamLocation = state.location || null;
+                const devices = Array.isArray(state.devices) ? state.devices : [];
+                const logs = Array.isArray(state.logEntries) ? state.logEntries : [];
+                latestTeamLocation = state.location ? { ...state.location, accuracy: state.locationAccuracy ?? null } : null;
                 updateScanStatus(state);
                 updateCoordinateButtons(state.coordinatePreference);
-                updateDeviceTable(state.devices, state.targetDeviceID);
-                refreshFilterOptions(state.devices, state.targetDeviceID);
-                updateLog(state.logEntries);
-                updateMap(latestTeamLocation, state.devices, state.targetDeviceID);
+                updateDeviceTable(devices, state.targetDeviceID);
+                refreshFilterOptions(devices, state.targetDeviceID);
+                updateLog(logs);
+                updateMap(latestTeamLocation, devices, state.targetDeviceID);
             } catch (error) {
                 console.error('Failed to fetch mission state', error);
             }
@@ -241,6 +244,7 @@ private let webConsoleHTML: String = #"""
             document.getElementById('modeMgrs').classList.toggle('active', mode === 'mgrs');
         }
 
+
         function updateDeviceTable(devices, targetId) {
             latestDevices = devices || [];
             latestTargetId = targetId || null;
@@ -250,16 +254,26 @@ private let webConsoleHTML: String = #"""
             sorted.sort((a, b) => {
                 switch (sortState.column) {
                     case 'name':
-                        return a.name.localeCompare(b.name);
-                    case 'range':
-                        const ar = a.estimatedRange ?? Number.POSITIVE_INFINITY;
-                        const br = b.estimatedRange ?? Number.POSITIVE_INFINITY;
-                        return ar - br;
+                        return (a.name || '').localeCompare(b.name || '');
+                    case 'range': {
+                        const ar = toNumber(a.estimatedRange);
+                        const br = toNumber(b.estimatedRange);
+                        const arValue = Number.isFinite(ar) ? ar : Number.POSITIVE_INFINITY;
+                        const brValue = Number.isFinite(br) ? br : Number.POSITIVE_INFINITY;
+                        return arValue - brValue;
+                    }
+                    case 'cep':
+                        return cepForDevice(a).value - cepForDevice(b).value;
                     case 'recent':
                         return new Date(b.lastSeen) - new Date(a.lastSeen);
                     case 'signal':
-                    default:
-                        return (b.lastRSSI ?? -200) - (a.lastRSSI ?? -200);
+                    default: {
+                        const aRssi = toNumber(a.lastRSSI);
+                        const bRssi = toNumber(b.lastRSSI);
+                        const aValue = Number.isFinite(aRssi) ? aRssi : -200;
+                        const bValue = Number.isFinite(bRssi) ? bRssi : -200;
+                        return bValue - aValue;
+                    }
                 }
             });
             if (sortState.ascending) {
@@ -270,8 +284,11 @@ private let webConsoleHTML: String = #"""
                 const isTarget = device.id === latestTargetId;
                 const services = device.services?.map(s => s.id).join(', ') || '—';
                 const advertised = device.advertisedServiceUUIDs?.join(', ') || '—';
-                const range = device.estimatedRange ? `${device.estimatedRange.toFixed(1)} m` : '—';
-                const latestFix = device.locations?.length ? device.locations[device.locations.length - 1] : null;
+                const rangeValue = toNumber(device.estimatedRange);
+                const range = Number.isFinite(rangeValue) ? `${rangeValue.toFixed(1)} m` : '—';
+                const latestFix = getLatestFix(device);
+                const address = device.hardwareAddress || '—';
+                const deviceId = device.id || '—';
                 const coordinate = (() => {
                     if (device.displayCoordinate) { return device.displayCoordinate; }
                     if (!latestFix) { return '—'; }
@@ -280,8 +297,11 @@ private let webConsoleHTML: String = #"""
                     if (!Number.isFinite(lat) || !Number.isFinite(lon)) { return '—'; }
                     return `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
                 })();
-                const stateLabel = `<span class="status-pill ${device.state?.toLowerCase() || 'idle'}">${device.state}</span>`;
+                const stateLabel = `<span class="status-pill ${device.state?.toLowerCase() || 'idle'}">${device.state || 'Idle'}</span>`;
                 const swatch = device.mapColorHex ? `<span class="color-swatch" style="background:${device.mapColorHex}"></span>` : '';
+                const cep = cepForDevice(device);
+                const lastSeen = device.lastSeen ? new Date(device.lastSeen).toLocaleTimeString() : '—';
+                const signalDescription = device.signalDescription || `RSSI: ${device.lastRSSI ?? '—'} dBm`;
                 return `
                     <tr class='${isTarget ? 'highlight' : ''}'>
                         <td>
@@ -293,16 +313,17 @@ private let webConsoleHTML: String = #"""
                             </div>
                         </td>
                         <td>
-                            <div>${device.signalDescription || `RSSI: ${device.lastRSSI} dBm`}</div>
+                            <div>${signalDescription}</div>
                             <div>${stateLabel}</div>
-                            <div class="subtle">Last RSSI: ${device.lastRSSI} dBm</div>
-                            <div class="subtle">Seen: ${new Date(device.lastSeen).toLocaleTimeString()}</div>
+                            <div class="subtle">Last RSSI: ${device.lastRSSI ?? '—'} dBm</div>
+                            <div class="subtle">Seen: ${lastSeen}</div>
                         </td>
                         <td>
-                            <div class="subtle">Address: ${device.hardwareAddress}</div>
-                            <div class="subtle">UUID: ${device.id}</div>
+                            <div class="subtle">Address: ${address}</div>
+                            <div class="subtle">UUID: ${deviceId}</div>
                         </td>
                         <td>${range}</td>
+                        <td>${cep.text}</td>
                         <td>${coordinate}</td>
                         <td class="actions">
                             ${isTarget ? '<button class="danger" onclick="clearTarget()">Clear Target</button>' : `<button onclick="markTarget('${device.id}')">Mark Target</button>`}
@@ -427,107 +448,110 @@ private let webConsoleHTML: String = #"""
             updateDeviceTable(latestDevices, latestTargetId);
         }
 
-        function ensureSources() {
-            if (!map.getSource(teamSourceId)) {
-                map.addSource(teamSourceId, { type: 'geojson', data: emptyCollection() });
-                map.addLayer({
-                    id: 'team-shadow',
-                    type: 'circle',
-                    source: teamSourceId,
-                    paint: {
-                        'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 8, 14, 18],
-                        'circle-color': 'rgba(56, 189, 248, 0.25)'
-                    }
-                });
-                map.addLayer({
-                    id: 'team-marker',
-                    type: 'circle',
-                    source: teamSourceId,
-                    paint: {
-                        'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 4, 14, 9],
-                        'circle-color': '#38bdf8',
-                        'circle-stroke-color': '#0f172a',
-                        'circle-stroke-width': 2
-                    }
-                });
+
+function ensureSources() {
+    if (!map.getSource(teamSourceId)) {
+        map.addSource(teamSourceId, { type: 'geojson', data: emptyCollection() });
+        map.addLayer({
+            id: 'team-shadow',
+            type: 'circle',
+            source: teamSourceId,
+            paint: {
+                'circle-radius': ['case', ['has', 'pixelRadius'], ['max', ['get', 'pixelRadius'], 12], ['interpolate', ['linear'], ['zoom'], 0, 8, 14, 18]],
+                'circle-color': 'rgba(56, 189, 248, 0.2)'
             }
-
-            if (!map.getSource(deviceSourceId)) {
-                map.addSource(deviceSourceId, { type: 'geojson', data: emptyCollection() });
-                map.addLayer({
-                    id: 'device-trails',
-                    type: 'line',
-                    source: deviceSourceId,
-                    filter: ['==', ['get', 'featureType'], 'trail'],
-                    paint: {
-                        'line-color': ['get', 'color'],
-                        'line-width': ['case', ['==', ['get', 'isTarget'], true], 4, 2],
-                        'line-opacity': ['case', ['==', ['get', 'isTarget'], true], 0.85, 0.55]
-                    }
-                });
-                map.addLayer({
-                    id: 'device-target-glow',
-                    type: 'circle',
-                    source: deviceSourceId,
-                    filter: ['all', ['==', ['get', 'featureType'], 'device'], ['==', ['get', 'isTarget'], true]],
-                    paint: {
-                        'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 10, 14, 22],
-                        'circle-color': ['get', 'color'],
-                        'circle-opacity': 0.25
-                    }
-                });
-                map.addLayer({
-                    id: 'device-points',
-                    type: 'circle',
-                    source: deviceSourceId,
-                    filter: ['==', ['get', 'featureType'], 'device'],
-                    paint: {
-                        'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 6, 14, 12],
-                        'circle-color': ['get', 'color'],
-                        'circle-stroke-color': '#0f172a',
-                        'circle-stroke-width': ['case', ['==', ['get', 'isTarget'], true], 3, 1.5]
-                    }
-                });
-                map.addLayer({
-                    id: 'device-labels',
-                    type: 'symbol',
-                    source: deviceSourceId,
-                    filter: ['==', ['get', 'featureType'], 'device'],
-                    layout: {
-                        'text-field': ['get', 'label'],
-                        'text-size': 12,
-                        'text-offset': [0, 1.2],
-                        'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold']
-                    },
-                    paint: {
-                        'text-color': '#e2e8f0',
-                        'text-halo-color': '#0f172a',
-                        'text-halo-width': 1.2
-                    }
-                });
-
-                map.on('click', 'device-points', event => {
-                    if (!event.features || !event.features.length) return;
-                    const feature = event.features[0];
-                    const properties = feature.properties || {};
-                    const coordinate = feature.geometry.coordinates.slice();
-                    const popupHtml = `
-                        <div style="min-width:220px">
-                            <strong style="display:block;margin-bottom:0.35rem;">${properties.name || 'Device'}</strong>
-                            <div class="subtle">Signal: ${properties.signal || '—'}</div>
-                            <div class="subtle">Range: ${properties.range || '—'}</div>
-                            <div class="subtle">Address: ${properties.address || '—'}</div>
-                            <div class="subtle">Last seen: ${properties.lastSeen || '—'}</div>
-                            <div class="subtle">Coordinate: ${properties.coordinate || '—'}</div>
-                        </div>
-                    `;
-                    popup.setLngLat(coordinate).setHTML(popupHtml).addTo(map);
-                });
-
-                map.on('mouseenter', 'device-points', () => { map.getCanvas().style.cursor = 'pointer'; });
-                map.on('mouseleave', 'device-points', () => { map.getCanvas().style.cursor = ''; });
+        });
+        map.addLayer({
+            id: 'team-marker',
+            type: 'circle',
+            source: teamSourceId,
+            paint: {
+                'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 4, 14, 9],
+                'circle-color': '#38bdf8',
+                'circle-stroke-color': '#0f172a',
+                'circle-stroke-width': 2
             }
-        }
+        });
+    }
+
+    if (!map.getSource(deviceSourceId)) {
+        map.addSource(deviceSourceId, { type: 'geojson', data: emptyCollection() });
+        map.addLayer({
+            id: 'device-trails',
+            type: 'line',
+            source: deviceSourceId,
+            filter: ['==', ['get', 'featureType'], 'trail'],
+            paint: {
+                'line-color': ['get', 'color'],
+                'line-width': ['case', ['==', ['get', 'isTarget'], true], 4, 2],
+                'line-opacity': ['case', ['==', ['get', 'isTarget'], true], 0.85, 0.55]
+            }
+        });
+        map.addLayer({
+            id: 'device-target-glow',
+            type: 'circle',
+            source: deviceSourceId,
+            filter: ['all', ['==', ['get', 'featureType'], 'device'], ['==', ['get', 'isTarget'], true]],
+            paint: {
+                'circle-radius': ['case', ['has', 'pixelRadius'], ['max', ['*', ['get', 'pixelRadius'], 1.25], 18], ['interpolate', ['linear'], ['zoom'], 0, 10, 14, 22]],
+                'circle-color': ['get', 'color'],
+                'circle-opacity': 0.25
+            }
+        });
+        map.addLayer({
+            id: 'device-points',
+            type: 'circle',
+            source: deviceSourceId,
+            filter: ['==', ['get', 'featureType'], 'device'],
+            paint: {
+                'circle-radius': ['case', ['has', 'pixelRadius'], ['max', ['get', 'pixelRadius'], 8], ['interpolate', ['linear'], ['zoom'], 0, 6, 14, 12]],
+                'circle-color': ['get', 'color'],
+                'circle-stroke-color': '#0f172a',
+                'circle-stroke-width': ['case', ['==', ['get', 'isTarget'], true], 3, 1.5]
+            }
+        });
+        map.addLayer({
+            id: 'device-labels',
+            type: 'symbol',
+            source: deviceSourceId,
+            filter: ['==', ['get', 'featureType'], 'device'],
+            layout: {
+                'text-field': ['get', 'label'],
+                'text-size': 12,
+                'text-offset': [0, 1.2],
+                'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold']
+            },
+            paint: {
+                'text-color': '#e2e8f0',
+                'text-halo-color': '#0f172a',
+                'text-halo-width': 1.2
+            }
+        });
+
+        map.on('click', 'device-points', event => {
+            if (!event.features || !event.features.length) return;
+            const feature = event.features[0];
+            const properties = feature.properties || {};
+            const coordinate = feature.geometry.coordinates.slice();
+            const popupHtml = `
+                <div style="min-width:220px">
+                    <strong style="display:block;margin-bottom:0.35rem;">${properties.name || 'Device'}</strong>
+                    <div class="subtle">Signal: ${properties.signal || '—'}</div>
+                    <div class="subtle">Range: ${properties.range || '—'}</div>
+                    <div class="subtle">CEP: ${properties.cep || '—'}</div>
+                    <div class="subtle">Address: ${properties.address || '—'}</div>
+                    <div class="subtle">Last seen: ${properties.lastSeen || '—'}</div>
+                    <div class="subtle">Coordinate: ${properties.coordinate || '—'}</div>
+                </div>
+            `;
+            popup.setLngLat(coordinate).setHTML(popupHtml).addTo(map);
+        });
+
+        map.on('mouseenter', 'device-points', () => { map.getCanvas().style.cursor = 'pointer'; });
+        map.on('mouseleave', 'device-points', () => { map.getCanvas().style.cursor = ''; });
+    }
+}
+
 
         function emptyCollection() {
             return { type: 'FeatureCollection', features: [] };
@@ -536,14 +560,35 @@ private let webConsoleHTML: String = #"""
         function buildMapFeatures(teamLocation, devices, targetId) {
             const deviceFeatures = [];
             let bounds = null;
+            const zoom = map.getZoom();
 
-            if (teamLocation && isFinite(teamLocation.latitude) && isFinite(teamLocation.longitude)) {
-                const point = [teamLocation.longitude, teamLocation.latitude];
+            const teamLat = toNumber(teamLocation?.latitude);
+            const teamLon = toNumber(teamLocation?.longitude);
+            const teamAccuracy = toNumber(teamLocation?.accuracy);
+            let teamCollection = emptyCollection();
+            if (Number.isFinite(teamLat) && Number.isFinite(teamLon)) {
+                const point = [teamLon, teamLat];
+                const pixelRadius = accuracyToPixels(teamAccuracy, teamLat, zoom);
+                const teamProperties = {};
+                if (Number.isFinite(teamAccuracy)) {
+                    teamProperties.accuracy = teamAccuracy;
+                }
+                if (pixelRadius !== null && pixelRadius !== undefined) {
+                    teamProperties.pixelRadius = pixelRadius;
+                }
+                teamCollection = {
+                    type: 'FeatureCollection',
+                    features: [{
+                        type: 'Feature',
+                        geometry: { type: 'Point', coordinates: point },
+                        properties: teamProperties
+                    }]
+                };
                 bounds = new mapboxgl.LngLatBounds(point, point);
             }
 
             (devices || []).forEach(device => {
-                if (!device.locations || device.locations.length === 0) return;
+                if (!device.locations || device.locations.length === 0) { return; }
                 const color = device.mapColorHex || '#22d3ee';
                 const sorted = [...device.locations].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
                 const path = sorted.map(extractCoordinate).filter(Boolean);
@@ -569,34 +614,39 @@ private let webConsoleHTML: String = #"""
                 const latestPoint = path[path.length - 1];
                 if (latestPoint) {
                     const coordinateText = device.displayCoordinate || formatCoordinate(latest);
+                    const cep = cepForDevice(device);
+                    const accuracyValue = Number.isFinite(cep.value) ? cep.value : null;
+                    const pixelRadius = accuracyToPixels(accuracyValue, latestPoint[1], zoom);
+                    const rangeValue = toNumber(device.estimatedRange);
+                    const rangeText = Number.isFinite(rangeValue) ? `${rangeValue.toFixed(1)} m` : '—';
+
+                    const properties = {
+                        featureType: 'device',
+                        id: device.id,
+                        name: device.name,
+                        color,
+                        isTarget: device.id === targetId,
+                        label: device.name,
+                        coordinate: coordinateText,
+                        signal: device.signalDescription || `RSSI: ${device.lastRSSI} dBm`,
+                        range: rangeText,
+                        address: device.hardwareAddress || device.id,
+                        lastSeen: device.lastSeen ? new Date(device.lastSeen).toLocaleTimeString() : '—',
+                        cep: cep.text
+                    };
+                    if (accuracyValue !== null) {
+                        properties.accuracy = accuracyValue;
+                    }
+                    if (pixelRadius !== null && pixelRadius !== undefined) {
+                        properties.pixelRadius = pixelRadius;
+                    }
                     deviceFeatures.push({
                         type: 'Feature',
                         geometry: { type: 'Point', coordinates: latestPoint },
-                        properties: {
-                            featureType: 'device',
-                            id: device.id,
-                            name: device.name,
-                            color,
-                            isTarget: device.id === targetId,
-                            label: device.name,
-                            coordinate: coordinateText,
-                            signal: device.signalDescription || `RSSI: ${device.lastRSSI} dBm`,
-                            range: device.estimatedRange ? `${device.estimatedRange.toFixed(1)} m` : '—',
-                            address: device.hardwareAddress || device.id,
-                            lastSeen: device.lastSeen ? new Date(device.lastSeen).toLocaleTimeString() : '—'
-                        }
+                        properties
                     });
                 }
             });
-
-            const teamCollection = (teamLocation && isFinite(teamLocation.latitude) && isFinite(teamLocation.longitude)) ? {
-                type: 'FeatureCollection',
-                features: [{
-                    type: 'Feature',
-                    geometry: { type: 'Point', coordinates: [teamLocation.longitude, teamLocation.latitude] },
-                    properties: {}
-                }]
-            } : emptyCollection();
 
             return {
                 deviceCollection: deviceFeatures.length ? { type: 'FeatureCollection', features: deviceFeatures } : emptyCollection(),
@@ -617,6 +667,33 @@ private let webConsoleHTML: String = #"""
             const lon = toNumber(location.longitude ?? location.coordinate?.longitude);
             if (!Number.isFinite(lat) || !Number.isFinite(lon)) { return '—'; }
             return `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+        }
+
+        function getLatestFix(device) {
+            if (!device || !Array.isArray(device.locations) || device.locations.length === 0) { return null; }
+            return device.locations[device.locations.length - 1];
+        }
+
+        function cepForDevice(device) {
+            const fix = getLatestFix(device);
+            const accuracy = toNumber(fix?.accuracy);
+            const range = toNumber(device.estimatedRange);
+            const value = Number.isFinite(accuracy) ? accuracy : (Number.isFinite(range) ? range : null);
+            if (!Number.isFinite(value)) {
+                return { value: Number.POSITIVE_INFINITY, text: '—' };
+            }
+            return { value, text: `${value.toFixed(1)} m` };
+        }
+
+        function accuracyToPixels(accuracyMeters, latitude, zoom) {
+            if (!Number.isFinite(accuracyMeters) || accuracyMeters <= 0) { return null; }
+            if (!Number.isFinite(latitude)) { return null; }
+            const zoomLevel = Number.isFinite(zoom) ? zoom : map.getZoom();
+            const metersPerPixel = 156543.03392 * Math.cos(latitude * Math.PI / 180) / Math.pow(2, zoomLevel);
+            if (!Number.isFinite(metersPerPixel) || metersPerPixel <= 0) { return null; }
+            const radius = accuracyMeters / metersPerPixel;
+            if (!Number.isFinite(radius)) { return null; }
+            return Math.min(Math.max(radius, 6), 120);
         }
 
         function toNumber(value) {

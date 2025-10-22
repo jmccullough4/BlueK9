@@ -6,11 +6,16 @@ struct DeviceGeo: Identifiable, Hashable, Codable {
     let id: UUID
     let timestamp: Date
     let coordinate: CLLocationCoordinate2D
+    let accuracy: CLLocationAccuracy?
 
-    init(id: UUID = UUID(), timestamp: Date = Date(), coordinate: CLLocationCoordinate2D) {
+    init(id: UUID = UUID(),
+         timestamp: Date = Date(),
+         coordinate: CLLocationCoordinate2D,
+         accuracy: CLLocationAccuracy? = nil) {
         self.id = id
         self.timestamp = timestamp
         self.coordinate = coordinate
+        self.accuracy = accuracy
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -18,6 +23,7 @@ struct DeviceGeo: Identifiable, Hashable, Codable {
         case timestamp
         case latitude
         case longitude
+        case accuracy
     }
 
     init(from decoder: Decoder) throws {
@@ -27,6 +33,7 @@ struct DeviceGeo: Identifiable, Hashable, Codable {
         let latitude = try container.decode(CLLocationDegrees.self, forKey: .latitude)
         let longitude = try container.decode(CLLocationDegrees.self, forKey: .longitude)
         coordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+        accuracy = try container.decodeIfPresent(CLLocationAccuracy.self, forKey: .accuracy)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -35,6 +42,7 @@ struct DeviceGeo: Identifiable, Hashable, Codable {
         try container.encode(timestamp, forKey: .timestamp)
         try container.encode(coordinate.latitude, forKey: .latitude)
         try container.encode(coordinate.longitude, forKey: .longitude)
+        try container.encodeIfPresent(accuracy, forKey: .accuracy)
     }
 }
 
@@ -43,7 +51,8 @@ extension DeviceGeo {
         lhs.id == rhs.id &&
         lhs.timestamp == rhs.timestamp &&
         lhs.coordinate.latitude == rhs.coordinate.latitude &&
-        lhs.coordinate.longitude == rhs.coordinate.longitude
+        lhs.coordinate.longitude == rhs.coordinate.longitude &&
+        lhs.accuracy == rhs.accuracy
     }
 
     func hash(into hasher: inout Hasher) {
@@ -51,6 +60,7 @@ extension DeviceGeo {
         hasher.combine(timestamp)
         hasher.combine(coordinate.latitude)
         hasher.combine(coordinate.longitude)
+        hasher.combine(accuracy ?? -1)
     }
 }
 
@@ -262,15 +272,24 @@ struct MissionState: Codable {
     var scanMode: ScanMode
     var isScanning: Bool
     var location: CLLocationCoordinate2D?
+    var locationAccuracy: CLLocationAccuracy?
     var devices: [BluetoothDevice]
     var logEntries: [MissionLogEntry]
     var coordinatePreference: CoordinateDisplayMode
     var targetDeviceID: UUID?
 
-    init(scanMode: ScanMode, isScanning: Bool, location: CLLocationCoordinate2D?, devices: [BluetoothDevice], logEntries: [MissionLogEntry], coordinatePreference: CoordinateDisplayMode, targetDeviceID: UUID?) {
+    init(scanMode: ScanMode,
+         isScanning: Bool,
+         location: CLLocationCoordinate2D?,
+         locationAccuracy: CLLocationAccuracy?,
+         devices: [BluetoothDevice],
+         logEntries: [MissionLogEntry],
+         coordinatePreference: CoordinateDisplayMode,
+         targetDeviceID: UUID?) {
         self.scanMode = scanMode
         self.isScanning = isScanning
         self.location = location
+        self.locationAccuracy = locationAccuracy
         self.devices = devices
         self.logEntries = logEntries
         self.coordinatePreference = coordinatePreference
@@ -281,6 +300,7 @@ struct MissionState: Codable {
         case scanMode
         case isScanning
         case location
+        case locationAccuracy
         case devices
         case logEntries
         case coordinatePreference
@@ -300,6 +320,7 @@ struct MissionState: Codable {
         logEntries = try container.decode([MissionLogEntry].self, forKey: .logEntries)
         coordinatePreference = try container.decode(CoordinateDisplayMode.self, forKey: .coordinatePreference)
         targetDeviceID = try container.decodeIfPresent(UUID.self, forKey: .targetDeviceID)
+        locationAccuracy = try container.decodeIfPresent(CLLocationAccuracy.self, forKey: .locationAccuracy)
 
         if container.contains(.location) {
             if try container.decodeNil(forKey: .location) {
@@ -323,6 +344,7 @@ struct MissionState: Codable {
         try container.encode(logEntries, forKey: .logEntries)
         try container.encode(coordinatePreference, forKey: .coordinatePreference)
         try container.encodeIfPresent(targetDeviceID, forKey: .targetDeviceID)
+        try container.encodeIfPresent(locationAccuracy, forKey: .locationAccuracy)
 
         if let location {
             var locationContainer = container.nestedContainer(keyedBy: LocationCodingKeys.self, forKey: .location)

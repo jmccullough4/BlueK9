@@ -314,6 +314,7 @@ struct MissionDashboardView: View {
     private var mapData: MissionMapData {
         MissionMapData(
             teamCoordinate: controller.location,
+            teamAccuracy: controller.locationAccuracy,
             devices: controller.devices,
             coordinateMode: controller.coordinateDisplayMode,
             targetDeviceID: controller.targetDeviceID,
@@ -461,8 +462,8 @@ struct MissionSecondaryButtonStyle: ButtonStyle {
 
 private struct MissionMapAnnotation: Identifiable {
     enum Kind {
-        case team
-        case latest(device: BluetoothDevice, coordinateText: String)
+        case team(accuracy: CLLocationAccuracy?)
+        case latest(device: BluetoothDevice, coordinateText: String, accuracy: CLLocationAccuracy?)
         case history(deviceID: UUID)
     }
 
@@ -472,12 +473,14 @@ private struct MissionMapAnnotation: Identifiable {
     let coordinate: CLLocationCoordinate2D
     let color: Color
     let kind: Kind
+    let accuracy: CLLocationAccuracy?
 
-    init(id: UUID = UUID(), coordinate: CLLocationCoordinate2D, color: Color, kind: Kind) {
+    init(id: UUID = UUID(), coordinate: CLLocationCoordinate2D, color: Color, kind: Kind, accuracy: CLLocationAccuracy? = nil) {
         self.id = id
         self.coordinate = coordinate
         self.color = color
         self.kind = kind
+        self.accuracy = accuracy
     }
 }
 
@@ -485,12 +488,12 @@ private struct MissionMapData {
     let annotations: [MissionMapAnnotation]
     let coordinates: [CLLocationCoordinate2D]
 
-    init(teamCoordinate: CLLocationCoordinate2D?, devices: [BluetoothDevice], coordinateMode: CoordinateDisplayMode, targetDeviceID: UUID?, scope: MissionMapScope) {
+    init(teamCoordinate: CLLocationCoordinate2D?, teamAccuracy: CLLocationAccuracy?, devices: [BluetoothDevice], coordinateMode: CoordinateDisplayMode, targetDeviceID: UUID?, scope: MissionMapScope) {
         var annotations: [MissionMapAnnotation] = []
         var coordinates: [CLLocationCoordinate2D] = []
 
         if let teamCoordinate {
-            annotations.append(MissionMapAnnotation(id: MissionMapAnnotation.teamIdentifier, coordinate: teamCoordinate, color: .blue, kind: .team))
+            annotations.append(MissionMapAnnotation(id: MissionMapAnnotation.teamIdentifier, coordinate: teamCoordinate, color: .blue, kind: .team(accuracy: teamAccuracy), accuracy: teamAccuracy))
             coordinates.append(teamCoordinate)
         }
 
@@ -507,9 +510,10 @@ private struct MissionMapData {
                 coordinates.append(geo.coordinate)
                 if geo.id == latest.id {
                     let coordinateText = device.displayCoordinate ?? CoordinateFormatter.shared.string(from: geo.coordinate, mode: coordinateMode)
-                    annotations.append(MissionMapAnnotation(id: geo.id, coordinate: geo.coordinate, color: baseColor, kind: .latest(device: device, coordinateText: coordinateText)))
+                    let accuracy = geo.accuracy ?? device.estimatedRange
+                    annotations.append(MissionMapAnnotation(id: geo.id, coordinate: geo.coordinate, color: baseColor, kind: .latest(device: device, coordinateText: coordinateText, accuracy: accuracy), accuracy: accuracy))
                 } else {
-                    annotations.append(MissionMapAnnotation(id: geo.id, coordinate: geo.coordinate, color: historyColor, kind: .history(deviceID: device.id)))
+                    annotations.append(MissionMapAnnotation(id: geo.id, coordinate: geo.coordinate, color: historyColor, kind: .history(deviceID: device.id), accuracy: geo.accuracy))
                 }
             }
         }
@@ -517,6 +521,12 @@ private struct MissionMapData {
         self.annotations = annotations
         self.coordinates = coordinates
     }
+}
+
+private func formattedCEP(_ accuracy: CLLocationAccuracy?) -> String? {
+    guard let accuracy, accuracy.isFinite, accuracy > 0 else { return nil }
+    let formatted = accuracy.formatted(.number.precision(.fractionLength(0...1)))
+    return "CEP ±\(formatted) m"
 }
 
 private enum MissionMapScope: Hashable, Identifiable {
@@ -601,6 +611,7 @@ private struct MissionMapDetailView: View {
     private var mapData: MissionMapData {
         MissionMapData(
             teamCoordinate: controller.location,
+            teamAccuracy: controller.locationAccuracy,
             devices: controller.devices,
             coordinateMode: controller.coordinateDisplayMode,
             targetDeviceID: controller.targetDeviceID,
@@ -805,7 +816,7 @@ private struct MissionCompactMapView: View {
     @ViewBuilder
     private func compactAnnotationView(for annotation: MissionMapAnnotation) -> some View {
         switch annotation.kind {
-        case .team:
+        case .team(let accuracy):
             VStack(spacing: 4) {
                 ZStack {
                     Circle().fill(Color.blue.opacity(0.28)).frame(width: 44, height: 44)
@@ -817,8 +828,13 @@ private struct MissionCompactMapView: View {
                     .padding(.vertical, 2)
                     .background(.ultraThinMaterial)
                     .clipShape(Capsule())
+                if let cep = formattedCEP(accuracy) {
+                    Text(cep)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
-        case .latest(let device, let coordinateText):
+        case .latest(let device, let coordinateText, let accuracy):
             Button {
                 onSelectDevice(device)
             } label: {
@@ -827,13 +843,24 @@ private struct MissionCompactMapView: View {
                         Circle().fill(annotation.color.opacity(0.32)).frame(width: 48, height: 48)
                         Circle().fill(annotation.color).frame(width: 20, height: 20)
                     }
-                    Text("\(device.name)\n\(coordinateText)")
-                        .multilineTextAlignment(.center)
-                        .font(.caption2.weight(.semibold))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(.ultraThinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    VStack(spacing: 2) {
+                        Text(device.name)
+                            .multilineTextAlignment(.center)
+                            .font(.caption2.weight(.semibold))
+                        Text(coordinateText)
+                            .multilineTextAlignment(.center)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        if let cep = formattedCEP(accuracy) {
+                            Text(cep)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 4)
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
             }
             .buttonStyle(.plain)
@@ -889,7 +916,7 @@ private struct MissionDetailMapView: View {
     @ViewBuilder
     private func detailAnnotationView(for annotation: MissionMapAnnotation) -> some View {
         switch annotation.kind {
-        case .team:
+        case .team(let accuracy):
             VStack(spacing: 6) {
                 Circle()
                     .fill(Color.blue)
@@ -899,8 +926,13 @@ private struct MissionDetailMapView: View {
                     .padding(6)
                     .background(.ultraThinMaterial)
                     .clipShape(Capsule())
+                if let cep = formattedCEP(accuracy) {
+                    Text(cep)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
-        case .latest(let device, let coordinateText):
+        case .latest(let device, let coordinateText, let accuracy):
             Button {
                 selectedDevice = device
             } label: {
@@ -909,12 +941,23 @@ private struct MissionDetailMapView: View {
                         .fill(annotation.color)
                         .frame(width: 26, height: 26)
                         .shadow(color: annotation.color.opacity(0.5), radius: 6, x: 0, y: 3)
-                    Text("\(device.name)\n\(coordinateText)")
-                        .multilineTextAlignment(.center)
-                        .font(.caption.weight(.semibold))
-                        .padding(6)
-                        .background(.ultraThinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    VStack(spacing: 2) {
+                        Text(device.name)
+                            .multilineTextAlignment(.center)
+                            .font(.caption.weight(.semibold))
+                        Text(coordinateText)
+                            .multilineTextAlignment(.center)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        if let cep = formattedCEP(accuracy) {
+                            Text(cep)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(6)
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
             }
             .buttonStyle(.plain)

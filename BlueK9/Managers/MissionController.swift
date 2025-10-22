@@ -20,8 +20,14 @@ final class MissionController: ObservableObject {
     private let logManager: LogManager
     private var webServer: WebControlServer?
     private let coordinatePreferenceKey = "MissionCoordinateDisplayMode"
-    private let locationHistoryLimit = 200
+    private let locationHistoryLimit = 120
+    private let logHistoryLimit = 1000
+    private let webLogLimit = 200
+    private let webLocationHistoryLimit = 60
     private let minimumCoordinateDelta = 0.00002
+    private let staleDeviceInterval: TimeInterval = 15 * 60
+    private let pruneCheckInterval: TimeInterval = 60
+    private var lastPruneCheck = Date.distantPast
     init(preview: Bool = false) {
         self.locationService = LocationService()
         self.bluetoothService = BluetoothService()
@@ -117,13 +123,59 @@ final class MissionController: ObservableObject {
         logManager.logURL()
     }
 
+    @MainActor
+    private func makeMissionStateSnapshot() -> MissionState {
+        let trimmedDevices = devices.map { device -> BluetoothDevice in
+            var copy = device
+            if copy.locations.count > webLocationHistoryLimit {
+                copy.locations = Array(copy.locations.suffix(webLocationHistoryLimit))
+            }
+            return copy
+        }
+
+        let limitedLog = Array(logEntries.suffix(webLogLimit))
+
+        return MissionState(
+            scanMode: scanMode,
+            isScanning: isScanning,
+            location: location,
+            locationAccuracy: locationAccuracy,
+            devices: trimmedDevices,
+            logEntries: limitedLog,
+            coordinatePreference: coordinateDisplayMode,
+            targetDeviceID: targetDeviceID
+        )
+    }
+
+    private func emptyMissionState() -> MissionState {
+        MissionState(
+            scanMode: .passive,
+            isScanning: false,
+            location: nil,
+            locationAccuracy: nil,
+            devices: [],
+            logEntries: [],
+            coordinatePreference: .latitudeLongitude,
+            targetDeviceID: nil
+        )
+    }
+
     private func startWebServer() {
         let server = WebControlServer(
             stateProvider: { [weak self] in
                 guard let self else {
-                    return MissionState(scanMode: .passive, isScanning: false, location: nil, devices: [], logEntries: [], coordinatePreference: .latitudeLongitude, targetDeviceID: nil)
+                    return MissionState(scanMode: .passive, isScanning: false, location: nil, locationAccuracy: nil, devices: [], logEntries: [], coordinatePreference: .latitudeLongitude, targetDeviceID: nil)
                 }
-                return MissionState(scanMode: self.scanMode, isScanning: self.isScanning, location: self.location, devices: self.devices, logEntries: self.logEntries, coordinatePreference: self.coordinateDisplayMode, targetDeviceID: self.targetDeviceID)
+
+                if Thread.isMainThread {
+                    return self.makeMissionStateSnapshot()
+                }
+
+                var snapshot: MissionState?
+                DispatchQueue.main.sync {
+                    snapshot = self.makeMissionStateSnapshot()
+                }
+                return snapshot ?? self.emptyMissionState()
             },
             commandHandler: { [weak self] command in
                 Task { @MainActor in
@@ -157,6 +209,9 @@ final class MissionController: ObservableObject {
 
     private func appendLog(_ entry: MissionLogEntry) {
         logEntries.append(entry)
+        if logEntries.count > logHistoryLimit {
+            logEntries.removeFirst(logEntries.count - logHistoryLimit)
+        }
         logManager.persist(entries: logEntries)
     }
 
@@ -170,7 +225,7 @@ final class MissionController: ObservableObject {
             var history = updatedDevice.locations
             let latest = history.last
             if shouldRecord(coordinate: coordinate, comparedTo: latest) {
-                history.append(DeviceGeo(coordinate: coordinate))
+                history.append(DeviceGeo(coordinate: coordinate, accuracy: locationAccuracy))
                 updatedDevice.locations = history
                 appendedNewLocation = true
             }
@@ -185,6 +240,8 @@ final class MissionController: ObservableObject {
         }
 
         devices.sort { $0.lastSeen > $1.lastSeen }
+
+        pruneStaleDevicesIfNeeded(now: Date())
 
         if let idx = devices.firstIndex(where: { $0.id == updatedDevice.id }) {
             if let latest = devices[idx].lastKnownLocation {
@@ -252,13 +309,38 @@ final class MissionController: ObservableObject {
         }
     }
 
+    private func pruneStaleDevicesIfNeeded(now: Date) {
+        guard now.timeIntervalSince(lastPruneCheck) >= pruneCheckInterval else { return }
+        lastPruneCheck = now
+
+        let cutoff = now.addingTimeInterval(-staleDeviceInterval)
+        let staleDevices = devices.filter { device in
+            guard device.id != targetDeviceID else { return false }
+            return device.lastSeen < cutoff
+        }
+
+        guard !staleDevices.isEmpty else { return }
+
+        let namesPreview = staleDevices.prefix(3).map { $0.name }.joined(separator: ", ")
+        devices.removeAll { device in
+            guard device.id != targetDeviceID else { return false }
+            return device.lastSeen < cutoff
+        }
+
+        var metadata: [String: String] = ["count": "\(staleDevices.count)"]
+        if !namesPreview.isEmpty {
+            metadata["devices"] = namesPreview
+        }
+        appendLog(MissionLogEntry(type: .note, message: "Pruned stale devices", metadata: metadata))
+    }
+
     private func bootstrapPreview() {
         location = CLLocationCoordinate2D(latitude: 37.3349, longitude: -122.0090)
         isScanning = true
         locationAuthorizationStatus = .authorizedAlways
         bluetoothState = .poweredOn
         devices = [
-            BluetoothDevice(id: UUID(), name: "Responder Beacon", rssi: -42, state: .connected, estimatedRange: 2.0, locations: [DeviceGeo(coordinate: CLLocationCoordinate2D(latitude: 37.3349, longitude: -122.0090))], displayCoordinate: CoordinateFormatter.shared.string(from: CLLocationCoordinate2D(latitude: 37.3349, longitude: -122.0090), mode: coordinateDisplayMode)),
+            BluetoothDevice(id: UUID(), name: "Responder Beacon", rssi: -42, state: .connected, estimatedRange: 2.0, locations: [DeviceGeo(coordinate: CLLocationCoordinate2D(latitude: 37.3349, longitude: -122.0090), accuracy: 4.0)], displayCoordinate: CoordinateFormatter.shared.string(from: CLLocationCoordinate2D(latitude: 37.3349, longitude: -122.0090), mode: coordinateDisplayMode)),
             BluetoothDevice(id: UUID(), name: "Body Cam", rssi: -67, state: .idle, estimatedRange: 6.5)
         ]
         targetDeviceID = devices.first?.id
@@ -275,6 +357,7 @@ extension MissionController: LocationServiceDelegate {
             self.location = location.coordinate
             self.locationAccuracy = location.horizontalAccuracy
             appendLog(MissionLogEntry(type: .locationUpdate, message: "Location update", metadata: ["lat": "\(location.coordinate.latitude)", "lon": "\(location.coordinate.longitude)"] ))
+            pruneStaleDevicesIfNeeded(now: Date())
         }
     }
 

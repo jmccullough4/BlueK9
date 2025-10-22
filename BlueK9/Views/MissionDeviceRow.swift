@@ -75,6 +75,12 @@ struct MissionDeviceRow: View {
                         .foregroundStyle(.secondary)
                 }
 
+                if let cep = cepText {
+                    Text(cep)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
                 if let coordinateText = coordinateText {
                     Text(coordinateText)
                         .font(.caption2)
@@ -169,6 +175,13 @@ struct MissionDeviceRow: View {
         let formatted = CoordinateFormatter.shared.string(from: location, mode: coordinateMode)
         return "Coordinate: \(formatted)"
     }
+
+    private var cepText: String? {
+        let accuracy = device.lastKnownLocation?.accuracy ?? device.estimatedRange
+        guard let accuracy, accuracy.isFinite, accuracy > 0 else { return nil }
+        let formatted = accuracy.formatted(.number.precision(.fractionLength(0...1)))
+        return "CEP ±\(formatted) m"
+    }
 }
 
 #Preview(traits: .sizeThatFitsLayout) {
@@ -181,7 +194,7 @@ struct MissionDeviceRow: View {
             services: [BluetoothServiceInfo(id: CBUUID(string: "180D"))],
             manufacturerData: "0A1B2C",
             estimatedRange: 2.0,
-            locations: [DeviceGeo(coordinate: CLLocationCoordinate2D(latitude: 37.3349, longitude: -122.0090))]
+            locations: [DeviceGeo(coordinate: CLLocationCoordinate2D(latitude: 37.3349, longitude: -122.0090), accuracy: 4.0)]
         ),
         coordinateMode: .latitudeLongitude,
         isTarget: true,
