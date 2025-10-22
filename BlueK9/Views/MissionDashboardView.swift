@@ -1118,12 +1118,18 @@ private struct MissionCompactMapView: View {
             }
         }
         .mapStyle(.standard)
-        .onChange(of: cameraPosition, initial: false) { _, newPosition in
-            guard case .region(let newRegion) = newPosition else { return }
-            if !regionsAreApproximatelyEqual(newRegion, lastCameraRegion) {
-                lastCameraRegion = newRegion
-                region = newRegion
+        .onMapCameraChange(frequency: .continuous) { context in
+            let newRegion = context.region
+            if context.reason == .userInteraction {
+                onUserInteraction()
             }
+
+            if regionsAreApproximatelyEqual(newRegion, lastCameraRegion) {
+                return
+            }
+
+            lastCameraRegion = newRegion
+            region = newRegion
         }
         .onChange(of: RegionSignature(region), initial: false) { _, _ in
             if regionsAreApproximatelyEqual(region, lastCameraRegion) {
@@ -1133,9 +1139,6 @@ private struct MissionCompactMapView: View {
             lastCameraRegion = region
             cameraPosition = .region(region)
         }
-        .simultaneousGesture(DragGesture(minimumDistance: 1).onChanged { _ in onUserInteraction() })
-        .simultaneousGesture(MagnificationGesture().onChanged { _ in onUserInteraction() })
-        .simultaneousGesture(TapGesture(count: 2).onEnded { onUserInteraction() })
     }
 
     @ViewBuilder
@@ -1226,12 +1229,18 @@ private struct MissionDetailMapView: View {
             }
         }
         .mapStyle(.standard)
-        .onChange(of: cameraPosition, initial: false) { _, newPosition in
-            guard case .region(let newRegion) = newPosition else { return }
-            if !regionsAreApproximatelyEqual(newRegion, lastCameraRegion) {
-                lastCameraRegion = newRegion
-                region = newRegion
+        .onMapCameraChange(frequency: .continuous) { context in
+            let newRegion = context.region
+            if context.reason == .userInteraction {
+                onUserInteraction()
             }
+
+            if regionsAreApproximatelyEqual(newRegion, lastCameraRegion) {
+                return
+            }
+
+            lastCameraRegion = newRegion
+            region = newRegion
         }
         .onChange(of: RegionSignature(region), initial: false) { _, _ in
             if regionsAreApproximatelyEqual(region, lastCameraRegion) {
@@ -1241,9 +1250,6 @@ private struct MissionDetailMapView: View {
             lastCameraRegion = region
             cameraPosition = .region(region)
         }
-        .simultaneousGesture(DragGesture(minimumDistance: 1).onChanged { _ in onUserInteraction() })
-        .simultaneousGesture(MagnificationGesture().onChanged { _ in onUserInteraction() })
-        .simultaneousGesture(TapGesture(count: 2).onEnded { onUserInteraction() })
     }
 
     @ViewBuilder
