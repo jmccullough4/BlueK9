@@ -23,10 +23,10 @@ final class MissionController: ObservableObject {
     private var webServer: WebControlServer?
     private let coordinatePreferenceKey = "MissionCoordinateDisplayMode"
     private let customNamesKey = "MissionCustomDeviceNames"
-    private let locationHistoryLimit = 120
+    private let locationHistoryLimit = 80
     private let logHistoryLimit = 1000
     private let webLogLimit = 200
-    private let webLocationHistoryLimit = 60
+    private let webLocationHistoryLimit = 40
     private let staleDeviceInterval: TimeInterval = 15 * 60
     private let pruneCheckInterval: TimeInterval = 60
     private var lastPruneCheck = Date.distantPast

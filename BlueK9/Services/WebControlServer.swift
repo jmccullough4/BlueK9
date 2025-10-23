@@ -379,6 +379,7 @@ private let webConsoleHTML: String = #"""
 
         const deviceSourceId = 'device-positions';
         const teamSourceId = 'team-position';
+        const historyLimit = 40;
         const mapFilterState = { type: 'all', deviceId: null };
         const sortState = { column: 'signal', ascending: false };
         const tableState = { frozen: false };
@@ -790,6 +791,19 @@ private let webConsoleHTML: String = #"""
                     }
                 });
                 map.addLayer({
+                    id: 'device-history',
+                    type: 'circle',
+                    source: deviceSourceId,
+                    filter: ['==', ['get', 'featureType'], 'history'],
+                    paint: {
+                        'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 2.5, 14, 6],
+                        'circle-color': ['get', 'color'],
+                        'circle-opacity': 0.72,
+                        'circle-stroke-color': '#0f172a',
+                        'circle-stroke-width': 1
+                    }
+                });
+                map.addLayer({
                     id: 'device-target-glow',
                     type: 'circle',
                     source: deviceSourceId,
@@ -916,7 +930,8 @@ private let webConsoleHTML: String = #"""
                 if (!device.locations || device.locations.length === 0) { return; }
                 const color = device.mapColorHex || '#22d3ee';
                 const sorted = [...device.locations].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-                const path = sorted.map(extractCoordinate).filter(Boolean);
+                const trimmed = historyLimit > 0 ? sorted.slice(-historyLimit) : sorted;
+                const path = trimmed.map(extractCoordinate).filter(Boolean);
                 if (path.length > 0) {
                     if (!bounds) {
                         bounds = new mapboxgl.LngLatBounds(path[0], path[0]);
@@ -935,7 +950,7 @@ private let webConsoleHTML: String = #"""
                         }
                     });
                 }
-                const latest = sorted[sorted.length - 1];
+                const latest = trimmed[trimmed.length - 1];
                 const latestPoint = path[path.length - 1];
                 if (latestPoint) {
                     const coordinateText = device.displayCoordinate || formatCoordinate(latest);
@@ -971,6 +986,23 @@ private let webConsoleHTML: String = #"""
                         properties
                     });
                 }
+                const historyFixes = trimmed.slice(0, -1);
+                historyFixes.forEach((fix, index) => {
+                    const point = extractCoordinate(fix);
+                    if (!point) { return; }
+                    deviceFeatures.push({
+                        type: 'Feature',
+                        id: `${device.id}-history-${fix.id || index}`,
+                        geometry: { type: 'Point', coordinates: point },
+                        properties: {
+                            featureType: 'history',
+                            id: device.id,
+                            color,
+                            isTarget: device.id === targetId,
+                            timestamp: fix.timestamp || null
+                        }
+                    });
+                });
             });
 
             return {

@@ -463,6 +463,8 @@ struct MissionDashboardView: View {
         MissionCompactMapView(
             region: $region,
             annotations: mapAnnotations,
+            historyPoints: mapHistoryPoints,
+            tracks: mapTracks,
             onSelectDevice: {
                 deviceIDRequestingRename = nil
                 selectedDeviceForDetails = $0
@@ -473,6 +475,14 @@ struct MissionDashboardView: View {
 
     private var mapAnnotations: [MissionMapAnnotation] {
         mapData.annotations
+    }
+
+    private var mapHistoryPoints: [MissionMapHistoryPoint] {
+        mapData.historyPoints
+    }
+
+    private var mapTracks: [MissionMapTrack] {
+        mapData.tracks
     }
 
     private var mapCoordinates: [CLLocationCoordinate2D] {
@@ -732,7 +742,6 @@ private struct MissionMapAnnotation: Identifiable {
     enum Kind {
         case team(accuracy: CLLocationAccuracy?)
         case latest(device: BluetoothDevice, coordinateText: String, accuracy: CLLocationAccuracy?)
-        case history(deviceID: UUID)
     }
 
     static let teamIdentifier = UUID()
@@ -754,10 +763,14 @@ private struct MissionMapAnnotation: Identifiable {
 
 private struct MissionMapData {
     let annotations: [MissionMapAnnotation]
+    let historyPoints: [MissionMapHistoryPoint]
+    let tracks: [MissionMapTrack]
     let coordinates: [CLLocationCoordinate2D]
 
     init(teamCoordinate: CLLocationCoordinate2D?, teamAccuracy: CLLocationAccuracy?, devices: [BluetoothDevice], coordinateMode: CoordinateDisplayMode, targetDeviceID: UUID?, scope: MissionMapScope) {
         var annotations: [MissionMapAnnotation] = []
+        var historyPoints: [MissionMapHistoryPoint] = []
+        var tracks: [MissionMapTrack] = []
         var coordinates: [CLLocationCoordinate2D] = []
 
         if let teamCoordinate {
@@ -771,24 +784,47 @@ private struct MissionMapData {
             guard !device.locations.isEmpty else { continue }
             let sortedLocations = device.locations.sorted(by: { $0.timestamp < $1.timestamp })
             guard let latest = sortedLocations.last else { continue }
+            let trimmedLocations = Array(sortedLocations.suffix(MissionMapData.historyRenderLimit))
             let baseColor: Color = (targetDeviceID == device.id) ? .red : DeviceColorPalette.color(for: device.id)
-            let historyColor = baseColor.opacity(0.35)
+            var trackCoordinates: [CLLocationCoordinate2D] = []
 
-            for geo in sortedLocations {
+            for geo in trimmedLocations {
                 coordinates.append(geo.coordinate)
+                trackCoordinates.append(geo.coordinate)
                 if geo.id == latest.id {
                     let coordinateText = device.displayCoordinate ?? CoordinateFormatter.shared.string(from: geo.coordinate, mode: coordinateMode)
                     let accuracy = geo.accuracy ?? device.estimatedRange
                     annotations.append(MissionMapAnnotation(id: geo.id, coordinate: geo.coordinate, color: baseColor, kind: .latest(device: device, coordinateText: coordinateText, accuracy: accuracy), accuracy: accuracy))
                 } else {
-                    annotations.append(MissionMapAnnotation(id: geo.id, coordinate: geo.coordinate, color: historyColor, kind: .history(deviceID: device.id), accuracy: geo.accuracy))
+                    historyPoints.append(MissionMapHistoryPoint(id: geo.id, coordinate: geo.coordinate, color: baseColor.opacity(0.45)))
                 }
+            }
+
+            if trackCoordinates.count > 1 {
+                tracks.append(MissionMapTrack(id: device.id, coordinates: trackCoordinates, color: baseColor, isTarget: targetDeviceID == device.id))
             }
         }
 
         self.annotations = annotations
+        self.historyPoints = historyPoints
+        self.tracks = tracks
         self.coordinates = coordinates
     }
+
+    private static let historyRenderLimit = 40
+}
+
+private struct MissionMapHistoryPoint: Identifiable {
+    let id: UUID
+    let coordinate: CLLocationCoordinate2D
+    let color: Color
+}
+
+private struct MissionMapTrack: Identifiable {
+    let id: UUID
+    let coordinates: [CLLocationCoordinate2D]
+    let color: Color
+    let isTarget: Bool
 }
 
 private func formattedCEP(_ accuracy: CLLocationAccuracy?) -> String? {
@@ -899,6 +935,8 @@ private struct MissionMapDetailView: View {
         MissionDetailMapView(
             region: $region,
             annotations: mapData.annotations,
+            historyPoints: mapData.historyPoints,
+            tracks: mapData.tracks,
             selectedDevice: $selectedDevice,
             onUserInteraction: onUserInteraction,
             onSelectDevice: onDeviceSelected
@@ -1194,6 +1232,8 @@ private func mapCameraPosition(from region: MKCoordinateRegion) -> MapCameraPosi
 private struct MissionCompactMapView: View {
     @Binding var region: MKCoordinateRegion
     let annotations: [MissionMapAnnotation]
+    let historyPoints: [MissionMapHistoryPoint]
+    let tracks: [MissionMapTrack]
     let onSelectDevice: (BluetoothDevice) -> Void
     let onUserInteraction: () -> Void
 
@@ -1201,9 +1241,11 @@ private struct MissionCompactMapView: View {
     @State private var lastCameraRegion: MKCoordinateRegion
     @State private var isProgrammaticCameraChange = false
 
-    init(region: Binding<MKCoordinateRegion>, annotations: [MissionMapAnnotation], onSelectDevice: @escaping (BluetoothDevice) -> Void, onUserInteraction: @escaping () -> Void) {
+    init(region: Binding<MKCoordinateRegion>, annotations: [MissionMapAnnotation], historyPoints: [MissionMapHistoryPoint], tracks: [MissionMapTrack], onSelectDevice: @escaping (BluetoothDevice) -> Void, onUserInteraction: @escaping () -> Void) {
         _region = region
         self.annotations = annotations
+        self.historyPoints = historyPoints
+        self.tracks = tracks
         self.onSelectDevice = onSelectDevice
         self.onUserInteraction = onUserInteraction
         _cameraPosition = State(initialValue: mapCameraPosition(from: region.wrappedValue))
@@ -1212,6 +1254,18 @@ private struct MissionCompactMapView: View {
 
     var body: some View {
         Map(position: $cameraPosition, interactionModes: .all) {
+            ForEach(tracks) { track in
+                MapPolyline(coordinates: track.coordinates)
+                    .stroke(track.color.opacity(track.isTarget ? 0.95 : 0.6), lineWidth: track.isTarget ? 5 : 3)
+            }
+            ForEach(historyPoints) { point in
+                Annotation("", coordinate: point.coordinate) {
+                    Circle()
+                        .fill(point.color)
+                        .frame(width: 12, height: 12)
+                        .shadow(color: point.color.opacity(0.4), radius: 2)
+                }
+            }
             ForEach(annotations) { annotation in
                 Annotation("", coordinate: annotation.coordinate) {
                     compactAnnotationView(for: annotation)
@@ -1273,8 +1327,8 @@ private struct MissionCompactMapView: View {
             } label: {
                 VStack(spacing: 4) {
                     ZStack {
-                        Circle().fill(annotation.color.opacity(0.32)).frame(width: 48, height: 48)
-                        Circle().fill(annotation.color).frame(width: 20, height: 20)
+                        Circle().fill(annotation.color.opacity(0.32)).frame(width: 52, height: 52)
+                        Circle().fill(annotation.color).frame(width: 24, height: 24)
                     }
                     VStack(spacing: 2) {
                         Text(device.name)
@@ -1297,10 +1351,6 @@ private struct MissionCompactMapView: View {
                 }
             }
             .buttonStyle(.plain)
-        case .history:
-            Circle()
-                .fill(annotation.color)
-                .frame(width: 10, height: 10)
         }
     }
 }
@@ -1308,6 +1358,8 @@ private struct MissionCompactMapView: View {
 private struct MissionDetailMapView: View {
     @Binding var region: MKCoordinateRegion
     let annotations: [MissionMapAnnotation]
+    let historyPoints: [MissionMapHistoryPoint]
+    let tracks: [MissionMapTrack]
     @Binding var selectedDevice: BluetoothDevice?
     let onUserInteraction: () -> Void
     let onSelectDevice: (BluetoothDevice) -> Void
@@ -1316,9 +1368,11 @@ private struct MissionDetailMapView: View {
     @State private var lastCameraRegion: MKCoordinateRegion
     @State private var isProgrammaticCameraChange = false
 
-    init(region: Binding<MKCoordinateRegion>, annotations: [MissionMapAnnotation], selectedDevice: Binding<BluetoothDevice?>, onUserInteraction: @escaping () -> Void, onSelectDevice: @escaping (BluetoothDevice) -> Void) {
+    init(region: Binding<MKCoordinateRegion>, annotations: [MissionMapAnnotation], historyPoints: [MissionMapHistoryPoint], tracks: [MissionMapTrack], selectedDevice: Binding<BluetoothDevice?>, onUserInteraction: @escaping () -> Void, onSelectDevice: @escaping (BluetoothDevice) -> Void) {
         _region = region
         self.annotations = annotations
+        self.historyPoints = historyPoints
+        self.tracks = tracks
         _selectedDevice = selectedDevice
         self.onUserInteraction = onUserInteraction
         self.onSelectDevice = onSelectDevice
@@ -1328,6 +1382,18 @@ private struct MissionDetailMapView: View {
 
     var body: some View {
         Map(position: $cameraPosition, interactionModes: .all) {
+            ForEach(tracks) { track in
+                MapPolyline(coordinates: track.coordinates)
+                    .stroke(track.color.opacity(track.isTarget ? 0.95 : 0.6), lineWidth: track.isTarget ? 5 : 3)
+            }
+            ForEach(historyPoints) { point in
+                Annotation("", coordinate: point.coordinate) {
+                    Circle()
+                        .fill(point.color)
+                        .frame(width: 12, height: 12)
+                        .shadow(color: point.color.opacity(0.4), radius: 2)
+                }
+            }
             ForEach(annotations) { annotation in
                 Annotation("", coordinate: annotation.coordinate) {
                     detailAnnotationView(for: annotation)
@@ -1411,10 +1477,6 @@ private struct MissionDetailMapView: View {
                 }
             }
             .buttonStyle(.plain)
-        case .history:
-            Circle()
-                .fill(annotation.color)
-                .frame(width: 12, height: 12)
         }
     }
 }
